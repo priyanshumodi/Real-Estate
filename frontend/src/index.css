@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  /* Navy Color Palette */
+  --color-navy-900: #0F1B2D;
+  --color-navy-800: #16233A;
+  --color-navy-700: #1B2C46;
+
+  /* Gold Accent Palette */
+  --color-gold-300: #E4C766;
+  --color-gold-500: #C9A227;
+  --color-gold-600: #AD8A1E;
+
+  /* Base Paper Shade */
+  --color-paper: #F8F7F4;
+
+  /* Ink Typography Palette */
+  --color-ink-900: #1F2733;
+  --color-ink-600: #4B5566;
+  --color-ink-400: #8A93A3;
+
+  /* Typography Fonts */
+  --font-display: "Fraunces", serif;
+  --font-sans: "Inter", sans-serif;
+}
