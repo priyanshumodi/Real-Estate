@@ -191,6 +191,84 @@ const addVisitStep = asyncHandler(async (req, res) => {
   return success(res, 201, "Visit step recorded", lead);
 });
 
+// Aggregated follow-up tracker across all leads (agency: all; agent: own leads only)
+const listFollowUps = asyncHandler(async (req, res) => {
+  const agencyId = scopedAgencyId(req.user);
+  const filter = { agencyId, isDeleted: false, "followUps.0": { $exists: true } };
+  if (req.user.role === "agent") filter.assignedAgent = req.user._id;
+
+  const leads = await Lead.find(filter)
+    .select("customer project followUps assignedAgent")
+    .populate("project", "name")
+    .populate("assignedAgent", "name");
+
+  const followUps = [];
+  leads.forEach((lead) => {
+    lead.followUps.forEach((f) => {
+      followUps.push({
+        _id: f._id,
+        leadId: lead._id,
+        customerName: lead.customer.name,
+        projectName: lead.project?.name,
+        agentName: lead.assignedAgent?.name,
+        scheduledAt: f.scheduledAt,
+        remarks: f.remarks,
+        isCompleted: f.isCompleted,
+      });
+    });
+  });
+
+  followUps.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+  return success(res, 200, "Follow-ups fetched", followUps);
+});
+
+// Perform a scheduled follow-up: log what happened, optionally move the lead's
+// status forward, and mark the follow-up completed — all in one action.
+const performFollowUp = asyncHandler(async (req, res) => {
+  const { method, remarks, response, newStatus } = req.body;
+
+  const agencyId = scopedAgencyId(req.user);
+  const filter = { _id: req.params.id, agencyId, isDeleted: false };
+  if (req.user.role === "agent") filter.assignedAgent = req.user._id;
+
+  const lead = await Lead.findOne(filter);
+  if (!lead) throw new ApiError(404, "Lead not found");
+
+  const followUp = lead.followUps.id(req.params.followUpId);
+  if (!followUp) throw new ApiError(404, "Follow-up not found");
+
+  followUp.isCompleted = true;
+
+  if (remarks) {
+    lead.communicationLogs.push({
+      method: method || "Phone",
+      remarks,
+      response: response || "Neutral",
+      createdBy: req.user._id,
+    });
+  }
+
+  lead.timeline.push({ action: "Follow-up performed", remarks, createdBy: req.user._id });
+
+  if (newStatus && newStatus !== lead.status) {
+    lead.status = newStatus;
+    lead.timeline.push({ action: `Status changed to ${newStatus}`, createdBy: req.user._id });
+
+    if (newStatus === "Converted" && !lead.convertedClient) {
+      const client = await Client.create({
+        agencyId: lead.agencyId, lead: lead._id,
+        name: lead.customer.name, email: lead.customer.email, phone: lead.customer.phone,
+      });
+      lead.convertedClient = client._id;
+      lead.timeline.push({ action: "Client profile created", createdBy: req.user._id });
+    }
+  }
+
+  await lead.save();
+  return success(res, 200, "Follow-up performed", lead);
+});
+
 module.exports = {
   createLead, listLeads, getLead, updateStatus, assignAgent, addCommunication, addFollowUp, addVisitStep,
+  listFollowUps, performFollowUp,
 };

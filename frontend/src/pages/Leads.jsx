@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import { useLeads, useCreateLead, useAgents } from "../api/leads";
 import { useProjects } from "../api/projects";
@@ -21,6 +21,7 @@ const priorityColor = {
 
 const Leads = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState({ status: "", priority: "", search: "" });
   const [showForm, setShowForm] = useState(false);
 
@@ -144,7 +145,11 @@ const Leads = () => {
               <tr><td colSpan={5} className="px-5 py-6 text-center text-ink-400">No leads found.</td></tr>
             )}
             {data?.data?.map((lead) => (
-              <tr key={lead._id} className="border-t border-gray-100 hover:bg-gray-50">
+              <tr
+                key={lead._id}
+                onClick={() => navigate(`/leads/${lead._id}`)}
+                className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+              >
                 <td className="px-5 py-3">
                   <Link to={`/leads/${lead._id}`} className="font-medium text-ink-900 hover:text-gold-600">
                     {lead.customer.name}

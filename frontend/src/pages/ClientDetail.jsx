@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useState } from "react";
 import AppLayout from "../components/layout/AppLayout";
 import { useClient, useAddClientDocument } from "../api/clients";
@@ -18,7 +18,15 @@ const ClientDetail = () => {
   return (
     <AppLayout>
       <p className="text-xs font-semibold tracking-wider text-gold-600 uppercase mb-1">Client</p>
-      <h1 className="font-display text-2xl text-ink-900 mb-1">{client.name}</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="font-display text-2xl text-ink-900">{client.name}</h1>
+        <Link
+          to={`/bookings?client=${client._id}`}
+          className="text-sm bg-navy-900 hover:bg-navy-800 text-white rounded-md px-4 py-2 font-semibold"
+        >
+          + Book a unit for this client
+        </Link>
+      </div>
       <p className="text-sm text-ink-600 mb-6">{client.phone} {client.email ? `· ${client.email}` : ""}</p>
 
       <div className="grid grid-cols-3 gap-6">

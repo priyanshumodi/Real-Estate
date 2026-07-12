@@ -1,0 +1,3 @@
+see as a agent i should have options like agent can record, communication(call, whatsapp, email, visit, meeting), agent can record response/feedback and track (neutral, negative, positive) schedule follow up for lead), agent can update lead status see where i can do this you dont give this feature its just lead is showing to also when i click to specific lead all the things should show me do this step by step be mindful of tokens 
+
+msg91

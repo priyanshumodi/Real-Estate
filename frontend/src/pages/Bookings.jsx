@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import { useBookings, useCreateBooking } from "../api/bookings";
 import { useProjects } from "../api/projects";
@@ -19,12 +19,20 @@ const statusColor = {
 };
 
 const Bookings = () => {
-  const [showForm, setShowForm] = useState(false);
+  const [searchParams] = useSearchParams();
+  const preselectedClient = searchParams.get("client");
+  const [showForm, setShowForm] = useState(!!preselectedClient);
   const { data, isLoading } = useBookings();
   const { data: projectsData } = useProjects();
   const { data: clientsData } = useClients();
   const createBooking = useCreateBooking();
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, setValue } = useForm();
+
+  useEffect(() => {
+    if (preselectedClient) setValue("client", preselectedClient);
+  }, [preselectedClient, setValue]);
+
+  const preselectedClientObj = clientsData?.data?.find((c) => c._id === preselectedClient);
 
   const onSubmit = async (formData) => {
     await createBooking.mutateAsync({
@@ -59,10 +67,21 @@ const Bookings = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-ink-900 mb-1.5">Client</label>
-            <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("client", { required: true })}>
-              <option value="">Select client</option>
-              {clientsData?.data?.map((c) => <option key={c._id} value={c._id}>{c.name} · {c.phone}</option>)}
-            </select>
+            {preselectedClientObj ? (
+              <>
+                <input
+                  disabled
+                  value={`${preselectedClientObj.name} · ${preselectedClientObj.phone}`}
+                  className="w-full rounded-md border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-ink-600"
+                />
+                <input type="hidden" {...register("client", { required: true })} />
+              </>
+            ) : (
+              <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("client", { required: true })}>
+                <option value="">Select client</option>
+                {clientsData?.data?.map((c) => <option key={c._id} value={c._id}>{c.name} · {c.phone}</option>)}
+              </select>
+            )}
           </div>
           <TextField label="Unit number" {...register("unitNumber", { required: true })} />
           <TextField label="Total amount" type="number" {...register("totalAmount", { required: true })} />
