@@ -10,8 +10,8 @@ const leadRoutes = require("./routes/leadRoutes");
 const clientRoutes = require("./routes/clientRoutes");
 const statsRoutes = require("./routes/statsRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
-
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
 const app = express();
@@ -51,8 +51,8 @@ app.use("/api/v1/leads", leadRoutes);
 app.use("/api/v1/clients", clientRoutes);
 app.use("/api/v1/stats", statsRoutes);
 app.use("/api/v1/bookings", bookingRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
-
 
 // --- 404 + Error handling (always last) ---
 app.use(notFound);

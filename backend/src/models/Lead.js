@@ -20,6 +20,7 @@ const followUpSchema = new mongoose.Schema(
     scheduledAt: { type: Date, required: true },
     remarks: { type: String, trim: true },
     isCompleted: { type: Boolean, default: false },
+    reminderSent: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }

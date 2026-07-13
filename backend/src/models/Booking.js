@@ -7,6 +7,7 @@ const installmentSchema = new mongoose.Schema(
     status: { type: String, enum: ["Pending", "Paid", "Overdue"], default: "Pending" },
     paidAt: { type: Date, default: null },
     paidAmount: { type: Number, default: 0 },
+    reminderSent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

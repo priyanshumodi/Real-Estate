@@ -9,7 +9,7 @@ const VISIT_STEPS = [
 
 // Renders like a courier/shipment tracker: a vertical line, filled dots for done steps,
 // a pulsing dot for the current step, hollow dots for what's ahead.
-const VisitTracker = ({ leadId, visitTimeline = [] }) => {
+const VisitTracker = ({ leadId, visitTimeline = [], readOnly = false }) => {
   const addVisitStep = useAddVisitStep(leadId);
   const [remarks, setRemarks] = useState("");
   const [useGps, setUseGps] = useState(false);
@@ -66,7 +66,7 @@ const VisitTracker = ({ leadId, visitTimeline = [] }) => {
         })}
       </ol>
 
-      {nextStep && (
+      {nextStep && !readOnly && (
         <div className="border-t border-gray-100 pt-4">
           <p className="text-xs uppercase tracking-wide text-ink-400 mb-2">
             Mark: <span className="text-navy-900 font-semibold">{nextStep}</span>
@@ -89,6 +89,11 @@ const VisitTracker = ({ leadId, visitTimeline = [] }) => {
             {addVisitStep.isPending ? "Saving..." : `Confirm: ${nextStep}`}
           </button>
         </div>
+      )}
+      {nextStep && readOnly && (
+        <p className="text-xs text-ink-400 border-t border-gray-100 pt-4">
+          Next step (<span className="font-medium text-ink-600">{nextStep}</span>) is tracked by the assigned agent.
+        </p>
       )}
       {!nextStep && <p className="text-sm text-green-600 font-medium">Visit fully tracked ✓</p>}
     </div>

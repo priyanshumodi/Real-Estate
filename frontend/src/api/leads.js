@@ -41,7 +41,10 @@ export const useAddCommunication = (id) => {
   return useMutation({
     mutationFn: async (payload) =>
       (await apiClient.post(`/leads/${id}/communication`, payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["lead", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead", id] });
+      qc.invalidateQueries({ queryKey: ["leads"] }); // Invalidated so 'Last 5 Responses' updates instantly on the grid
+    },
   });
 };
 
@@ -50,7 +53,27 @@ export const useAddFollowUp = (id) => {
   return useMutation({
     mutationFn: async (payload) =>
       (await apiClient.post(`/leads/${id}/followup`, payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["lead", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead", id] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+};
+
+export const useBulkImportLeads = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload) => (await apiClient.post("/leads/bulk-import", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+  });
+};
+
+export const useBulkAssignLeads = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload) =>
+      (await apiClient.patch("/leads/bulk-assign", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
   });
 };
 

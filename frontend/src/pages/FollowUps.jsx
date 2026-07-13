@@ -2,6 +2,7 @@ import { useState, Fragment } from "react";
 import { Link } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import { useFollowUps, usePerformFollowUp } from "../api/followups";
+import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
 
 const METHODS = ["Phone", "WhatsApp", "SMS", "Email", "Office Meeting", "Site Visit"];
@@ -11,6 +12,8 @@ const STATUS_OPTIONS = [
 ];
 
 const FollowUps = () => {
+  const { user } = useAuth();
+  const isAgent = user?.role === "agent";
   const { data: followUps, isLoading } = useFollowUps();
   const performFollowUp = usePerformFollowUp();
   const [openId, setOpenId] = useState(null);
@@ -76,7 +79,7 @@ const FollowUps = () => {
                       )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {!f.isCompleted && (
+                      {!f.isCompleted && isAgent && (
                         <button
                           onClick={() => (isOpen ? setOpenId(null) : openRow(f))}
                           className="text-xs text-navy-900 font-medium hover:text-gold-600"
@@ -84,9 +87,12 @@ const FollowUps = () => {
                           {isOpen ? "Cancel" : "Perform follow-up"}
                         </button>
                       )}
+                      {!f.isCompleted && !isAgent && (
+                        <span className="text-xs text-ink-400">Tracked by {f.agentName || "agent"}</span>
+                      )}
                     </td>
                   </tr>
-                  {isOpen && (
+                  {isOpen && isAgent && (
                     <tr className="bg-gray-50 border-t border-gray-100">
                       <td colSpan={6} className="px-5 py-4">
                         <div className="grid grid-cols-4 gap-3">

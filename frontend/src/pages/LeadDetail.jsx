@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { useState } from "react";
 import AppLayout from "../components/layout/AppLayout";
 import VisitTracker from "../components/leads/VisitTracker";
+import { useAuth } from "../context/AuthContext";
 import { useLead, useUpdateLeadStatus, useAddCommunication, useAddFollowUp } from "../api/leads";
 import Button from "../components/ui/Button";
 
@@ -13,6 +14,8 @@ const METHODS = ["Phone", "WhatsApp", "SMS", "Email", "Office Meeting", "Site Vi
 
 const LeadDetail = () => {
   const { id } = useParams();
+  const { user } = useAuth();
+  const isAgent = user?.role === "agent";
   const { data: lead, isLoading } = useLead(id);
   const updateStatus = useUpdateLeadStatus(id);
   const addComm = useAddCommunication(id);
@@ -54,99 +57,118 @@ const LeadDetail = () => {
       <p className="text-sm text-ink-600 mb-6">{lead.customer.phone} · {lead.project?.name}</p>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* Left: details + actions */}
+        {/* Left: agent-only actions. Agency gets a read-only status summary instead. */}
         <div className="col-span-1 space-y-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">
-              Current status: <span className="text-ink-900 font-semibold">{lead.status}</span>
-            </p>
-            <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-3"
-              value={status || lead.status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <Button
-              loading={updateStatus.isPending}
-              onClick={() => saveStatus(status || lead.status)}
-            >
-              Save status
-            </Button>
-
-            {lead.status !== "Converted" && (
-              <button
-                onClick={() => saveStatus("Converted")}
-                disabled={updateStatus.isPending}
-                className="w-full mt-2 text-xs text-gold-600 font-medium hover:text-gold-700"
-              >
-                Quick action: Convert to Client now
-              </button>
-            )}
-
-            {statusMsg && (
-              <p className="text-xs text-green-600 bg-green-50 border border-green-100 rounded-md px-3 py-2 mt-3">
-                {statusMsg}
+          {!isAgent && (
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <p className="text-xs uppercase tracking-wide text-ink-400 mb-1">Current status</p>
+              <p className="text-lg font-semibold text-ink-900 mb-1">{lead.status}</p>
+              <p className="text-xs text-ink-400">
+                Priority: {lead.priority} · Assigned to {lead.assignedAgent?.name || "no one yet"}
               </p>
-            )}
-          </div>
+              <p className="text-xs text-ink-400 mt-3">
+                Status, communication, and follow-ups are managed by the assigned agent. You can track everything on the right.
+              </p>
+            </div>
+          )}
 
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">Log communication</p>
-            <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2"
-              value={commMethod}
-              onChange={(e) => setCommMethod(e.target.value)}
-            >
-              {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <textarea
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2"
-              placeholder="What was discussed..."
-              value={commRemarks}
-              onChange={(e) => setCommRemarks(e.target.value)}
-            />
-            <label className="block text-xs text-ink-400 mb-1">Customer response</label>
-            <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-3"
-              value={commResponse}
-              onChange={(e) => setCommResponse(e.target.value)}
-            >
-              <option>Positive</option>
-              <option>Neutral</option>
-              <option>Negative</option>
-            </select>
-            <Button
-              loading={addComm.isPending}
-              disabled={!commRemarks}
-              onClick={() => {
-                addComm.mutate({ method: commMethod, remarks: commRemarks, response: commResponse });
-                setCommRemarks("");
-              }}
-            >
-              Log it
-            </Button>
-          </div>
+          {isAgent && (
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">
+                Current status: <span className="text-ink-900 font-semibold">{lead.status}</span>
+              </p>
+              <select
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-3"
+                value={status || lead.status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <Button
+                loading={updateStatus.isPending}
+                onClick={() => saveStatus(status || lead.status)}
+              >
+                Save status
+              </Button>
 
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">Schedule follow-up</p>
-            <input
-              type="datetime-local"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2"
-              value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
-            />
-            <Button
-              loading={addFollowUp.isPending}
-              disabled={!followUpDate}
-              onClick={() => {
-                addFollowUp.mutate({ scheduledAt: followUpDate });
-                setFollowUpDate("");
-              }}
-            >
-              Schedule
-            </Button>
-          </div>
+              {lead.status !== "Converted" && (
+                <button
+                  onClick={() => saveStatus("Converted")}
+                  disabled={updateStatus.isPending}
+                  className="w-full mt-2 text-xs text-gold-600 font-medium hover:text-gold-700"
+                >
+                  Quick action: Convert to Client now
+                </button>
+              )}
+
+              {statusMsg && (
+                <p className="text-xs text-green-600 bg-green-50 border border-green-100 rounded-md px-3 py-2 mt-3">
+                  {statusMsg}
+                </p>
+              )}
+            </div>
+          )}
+
+          {isAgent && (
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">Log communication</p>
+              <select
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2"
+                value={commMethod}
+                onChange={(e) => setCommMethod(e.target.value)}
+              >
+                {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <textarea
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2"
+                placeholder="What was discussed..."
+                value={commRemarks}
+                onChange={(e) => setCommRemarks(e.target.value)}
+              />
+              <label className="block text-xs text-ink-400 mb-1">Customer response</label>
+              <select
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-3"
+                value={commResponse}
+                onChange={(e) => setCommResponse(e.target.value)}
+              >
+                <option>Positive</option>
+                <option>Neutral</option>
+                <option>Negative</option>
+              </select>
+              <Button
+                loading={addComm.isPending}
+                disabled={!commRemarks}
+                onClick={() => {
+                  addComm.mutate({ method: commMethod, remarks: commRemarks, response: commResponse });
+                  setCommRemarks("");
+                }}
+              >
+                Log it
+              </Button>
+            </div>
+          )}
+
+          {isAgent && (
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">Schedule follow-up</p>
+              <input
+                type="datetime-local"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm mb-2"
+                value={followUpDate}
+                onChange={(e) => setFollowUpDate(e.target.value)}
+              />
+              <Button
+                loading={addFollowUp.isPending}
+                disabled={!followUpDate}
+                onClick={() => {
+                  addFollowUp.mutate({ scheduledAt: followUpDate });
+                  setFollowUpDate("");
+                }}
+              >
+                Schedule
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Right: timeline + follow-up history */}
@@ -205,7 +227,7 @@ const LeadDetail = () => {
       </div>
 
       <div className="mt-6">
-        <VisitTracker leadId={lead._id} visitTimeline={lead.visitTimeline} />
+        <VisitTracker leadId={lead._id} visitTimeline={lead.visitTimeline} readOnly={!isAgent} />
       </div>
     </AppLayout>
   );

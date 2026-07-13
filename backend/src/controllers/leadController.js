@@ -2,6 +2,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { ApiError, success } = require("../utils/apiResponse");
 const Lead = require("../models/Lead");
 const Client = require("../models/Client");
+const notify = require("../utils/notify");
 
 const scopedAgencyId = (user) => (user.role === "agency" ? user._id : user.agencyId);
 
@@ -26,6 +27,13 @@ const createLead = asyncHandler(async (req, res) => {
     }],
   });
 
+  if (assignedAgent) {
+    await notify({
+      agencyId: req.user._id, recipient: assignedAgent, type: "AssignmentNotification",
+      title: "New lead assigned to you", message: `${customer.name} — ${lead.status}`, lead: lead._id,
+    });
+  }
+
   return success(res, 201, "Lead created", lead);
 });
 
@@ -47,15 +55,22 @@ const listLeads = asyncHandler(async (req, res) => {
   }
 
   const skip = (Number(page) - 1) * Number(limit);
-  const [leads, total] = await Promise.all([
+  const [leadsRaw, total] = await Promise.all([
     Lead.find(filter)
       .populate("project", "name location")
       .populate("assignedAgent", "name email")
       .sort(sortBy)
       .skip(skip)
-      .limit(Number(limit)),
+      .limit(Number(limit))
+      .lean(),
     Lead.countDocuments(filter),
   ]);
+
+  // Last 5 communication responses, oldest→newest (same idea as a sports "Last 5" form guide)
+  const leads = leadsRaw.map((lead) => ({
+    ...lead,
+    recentResponses: (lead.communicationLogs || []).slice(-5).map((c) => c.response),
+  }));
 
   return success(res, 200, "Leads fetched", leads, {
     total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / limit),
@@ -129,6 +144,11 @@ const assignAgent = asyncHandler(async (req, res) => {
   lead.timeline.push({ action: "Lead assigned to agent", createdBy: req.user._id });
   await lead.save();
 
+  await notify({
+    agencyId: req.user._id, recipient: agentId, type: "AssignmentNotification",
+    title: "Lead assigned to you", message: `${lead.customer.name}`, lead: lead._id,
+  });
+
   return success(res, 200, "Lead assigned", lead);
 });
 
@@ -187,6 +207,13 @@ const addVisitStep = asyncHandler(async (req, res) => {
   lead.visitTimeline.push({ step, remarks, gpsLocation, imageUrl, createdBy: req.user._id });
   lead.timeline.push({ action: `Visit step: ${step}`, remarks, createdBy: req.user._id });
   await lead.save();
+
+  if (step === "Visit Assigned" && lead.assignedAgent) {
+    await notify({
+      agencyId: lead.agencyId, recipient: lead.assignedAgent, type: "VisitReminder",
+      title: "Site visit assigned", message: `${lead.customer.name} — start the visit tracker`, lead: lead._id,
+    });
+  }
 
   return success(res, 201, "Visit step recorded", lead);
 });
@@ -268,7 +295,66 @@ const performFollowUp = asyncHandler(async (req, res) => {
   return success(res, 200, "Follow-up performed", lead);
 });
 
+// Agency only — bulk-create leads from a parsed CSV (frontend parses, backend just persists).
+// All rows go to one project; duplicates (same phone within that project) are skipped.
+const bulkImportLeads = asyncHandler(async (req, res) => {
+  const { project, leads } = req.body;
+  if (!project || !Array.isArray(leads) || leads.length === 0) {
+    throw new ApiError(400, "project and a non-empty leads array are required");
+  }
+
+  const existingPhones = new Set(
+    (await Lead.find({ agencyId: req.user._id, project, isDeleted: false }).select("customer.phone"))
+      .map((l) => l.customer.phone)
+  );
+
+  let created = 0, skipped = 0;
+  const errors = [];
+
+  for (const row of leads) {
+    const phone = row.phone?.toString().trim();
+    const name = row.name?.toString().trim();
+    if (!name || !phone) { errors.push(`Skipped row (missing name/phone): ${JSON.stringify(row)}`); continue; }
+    if (existingPhones.has(phone)) { skipped++; continue; }
+
+    await Lead.create({
+      agencyId: req.user._id,
+      project,
+      customer: { name, phone, email: row.email?.trim() || undefined },
+      source: row.source?.trim() || "Other",
+      priority: ["Hot", "Warm", "Cold"].includes(row.priority) ? row.priority : "Warm",
+      timeline: [{ action: "Lead imported from file", createdBy: req.user._id }],
+    });
+    existingPhones.add(phone);
+    created++;
+  }
+
+  return success(res, 201, "Import complete", { created, skipped, total: leads.length, errors });
+});
+
+// Agency only — assign many leads to one agent in a single action (separate from import)
+const bulkAssignLeads = asyncHandler(async (req, res) => {
+  const { leadIds, agentId } = req.body;
+  if (!Array.isArray(leadIds) || leadIds.length === 0 || !agentId) {
+    throw new ApiError(400, "leadIds (array) and agentId are required");
+  }
+
+  const leads = await Lead.find({ _id: { $in: leadIds }, agencyId: req.user._id, isDeleted: false });
+  for (const lead of leads) {
+    lead.assignedAgent = agentId;
+    if (lead.status === "New") lead.status = "Assigned";
+    lead.timeline.push({ action: "Lead assigned to agent (bulk)", createdBy: req.user._id });
+    await lead.save();
+    await notify({
+      agencyId: req.user._id, recipient: agentId, type: "AssignmentNotification",
+      title: "Lead assigned to you", message: lead.customer.name, lead: lead._id,
+    });
+  }
+
+  return success(res, 200, "Leads assigned", { assigned: leads.length });
+});
+
 module.exports = {
   createLead, listLeads, getLead, updateStatus, assignAgent, addCommunication, addFollowUp, addVisitStep,
-  listFollowUps, performFollowUp,
+  listFollowUps, performFollowUp, bulkImportLeads, bulkAssignLeads,
 };

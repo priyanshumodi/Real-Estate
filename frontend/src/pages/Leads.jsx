@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
-import { useLeads, useCreateLead, useAgents } from "../api/leads";
+import { useLeads, useCreateLead, useAgents, useBulkImportLeads, useBulkAssignLeads } from "../api/leads";
 import { useProjects } from "../api/projects";
+import Papa from "papaparse";
 import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
 import TextField from "../components/ui/TextField";
@@ -19,6 +20,17 @@ const priorityColor = {
   Cold: "bg-blue-50 text-blue-600",
 };
 
+// Renders one response as a small colored badge — same idea as a sports "Last 5" form guide
+const ResponseBadge = ({ response }) => {
+  if (response === "Positive") {
+    return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs font-bold">✓</span>;
+  }
+  if (response === "Negative") {
+    return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-xs font-bold">✕</span>;
+  }
+  return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs font-bold">–</span>;
+};
+
 const Leads = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -29,7 +41,37 @@ const Leads = () => {
   const { data: projectsData } = useProjects();
   const { data: agents } = useAgents();
   const createLead = useCreateLead();
+  const bulkImport = useBulkImportLeads();
+  const bulkAssign = useBulkAssignLeads();
   const { register, handleSubmit, reset } = useForm();
+
+  const [showImport, setShowImport] = useState(false);
+  const [importProject, setImportProject] = useState("");
+  const [importResult, setImportResult] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkAgent, setBulkAgent] = useState("");
+
+  const toggleSelect = (id) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const handleFile = (file) => {
+    if (!importProject) { alert("Pick a project first — the whole file will be imported into it."); return; }
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const res = await bulkImport.mutateAsync({ project: importProject, leads: results.data });
+        setImportResult(res.data);
+      },
+    });
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkAgent || selectedIds.length === 0) return;
+    await bulkAssign.mutateAsync({ leadIds: selectedIds, agentId: bulkAgent });
+    setSelectedIds([]);
+    setBulkAgent("");
+  };
 
   const onSubmit = async (formData) => {
     await createLead.mutateAsync({
@@ -51,11 +93,44 @@ const Leads = () => {
           <h1 className="font-display text-2xl text-ink-900">Leads</h1>
         </div>
         {user?.role === "agency" && (
-          <Button className="!w-auto px-4" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? "Cancel" : "+ New lead"}
-          </Button>
+          <div className="flex gap-2">
+            <Button className="!w-auto px-4" variant="ghost" onClick={() => setShowImport((s) => !s)}>
+              {showImport ? "Cancel import" : "Import CSV"}
+            </Button>
+            <Button className="!w-auto px-4" onClick={() => setShowForm((s) => !s)}>
+              {showForm ? "Cancel" : "+ New lead"}
+            </Button>
+          </div>
         )}
       </div>
+
+      {showImport && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+          <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">
+            CSV columns expected: <code>name, phone, email, source, priority</code>
+          </p>
+          <select
+            className="rounded-md border border-gray-300 px-3.5 py-2.5 text-sm mb-3"
+            value={importProject}
+            onChange={(e) => setImportProject(e.target.value)}
+          >
+            <option value="">Select project for this batch</option>
+            {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+          </select>
+          <input
+            type="file"
+            accept=".csv"
+            className="block text-sm"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          />
+          {bulkImport.isPending && <p className="text-sm text-ink-400 mt-2">Importing...</p>}
+          {importResult && (
+            <p className="text-sm text-ink-600 mt-3">
+              Created {importResult.created}, skipped {importResult.skipped} duplicates, out of {importResult.total} rows.
+            </p>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <form
@@ -128,21 +203,42 @@ const Leads = () => {
         </select>
       </div>
 
+      {selectedIds.length > 0 && (
+        <div className="bg-navy-900 text-white rounded-xl px-5 py-3 mb-4 flex items-center justify-between">
+          <p className="text-sm">{selectedIds.length} lead(s) selected</p>
+          <div className="flex gap-2 items-center">
+            <select
+              className="rounded-md px-3 py-1.5 text-sm text-ink-900"
+              value={bulkAgent}
+              onChange={(e) => setBulkAgent(e.target.value)}
+            >
+              <option value="">Assign to agent...</option>
+              {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
+            </select>
+            <Button className="!w-auto px-4" loading={bulkAssign.isPending} disabled={!bulkAgent} onClick={handleBulkAssign}>
+              Assign
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-ink-600 text-xs uppercase tracking-wide">
             <tr>
+              {user?.role === "agency" && <th className="px-5 py-3 w-8"></th>}
               <th className="text-left px-5 py-3">Customer</th>
               <th className="text-left px-5 py-3">Project</th>
               <th className="text-left px-5 py-3">Agent</th>
               <th className="text-left px-5 py-3">Priority</th>
+              <th className="text-left px-5 py-3">Last 5 Responses</th>
               <th className="text-left px-5 py-3">Status</th>
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-5 py-6 text-center text-ink-400">Loading...</td></tr>}
+            {isLoading && <tr><td colSpan={user?.role === "agency" ? 7 : 6} className="px-5 py-6 text-center text-ink-400">Loading...</td></tr>}
             {!isLoading && data?.data?.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-6 text-center text-ink-400">No leads found.</td></tr>
+              <tr><td colSpan={user?.role === "agency" ? 7 : 6} className="px-5 py-6 text-center text-ink-400">No leads found.</td></tr>
             )}
             {data?.data?.map((lead) => (
               <tr
@@ -150,6 +246,15 @@ const Leads = () => {
                 onClick={() => navigate(`/leads/${lead._id}`)}
                 className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
               >
+                {user?.role === "agency" && (
+                  <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(lead._id)}
+                      onChange={() => toggleSelect(lead._id)}
+                    />
+                  </td>
+                )}
                 <td className="px-5 py-3">
                   <Link to={`/leads/${lead._id}`} className="font-medium text-ink-900 hover:text-gold-600">
                     {lead.customer.name}
@@ -162,6 +267,15 @@ const Leads = () => {
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${priorityColor[lead.priority]}`}>
                     {lead.priority}
                   </span>
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex gap-1">
+                    {lead.recentResponses?.length > 0 ? (
+                      lead.recentResponses.map((r, i) => <ResponseBadge key={i} response={r} />)
+                    ) : (
+                      <span className="text-xs text-ink-400">No activity</span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-5 py-3 text-ink-600">{lead.status}</td>
               </tr>

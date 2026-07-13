@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import NotificationBell from "./NotificationBell";
 
 const navItems = [
   { to: "/dashboard", label: "Overview" },
@@ -18,8 +19,9 @@ const AppLayout = ({ children }) => {
   return (
     <div className="min-h-screen flex bg-paper">
       <aside className="w-60 bg-navy-900 flex flex-col shrink-0">
-        <div className="px-6 py-5 font-display text-lg text-white tracking-wide border-b border-white/10">
-          Estately
+        <div className="px-6 py-5 flex items-center justify-between border-b border-white/10">
+          <span className="font-display text-lg text-white tracking-wide">Estately</span>
+          <NotificationBell />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {visibleNavItems.map((item) => (

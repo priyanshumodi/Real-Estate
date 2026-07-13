@@ -3,6 +3,7 @@ const { ApiError, success } = require("../utils/apiResponse");
 const Booking = require("../models/Booking");
 const Project = require("../models/Project");
 const Client = require("../models/Client");
+const notify = require("../utils/notify");
 
 const scopedAgencyId = (user) => (user.role === "agency" ? user._id : user.agencyId);
 
@@ -55,6 +56,12 @@ const createBooking = asyncHandler(async (req, res) => {
 
   clientDoc.purchaseHistory.push(booking._id);
   await clientDoc.save();
+
+  await notify({
+    agencyId: req.user._id, recipient: null, type: "BookingReminder",
+    title: "Unit reserved", message: `${clientDoc.name} — Unit ${unitNumber}, move to Agreement next`,
+    booking: booking._id,
+  });
 
   return success(res, 201, "Unit reserved and booking created", booking);
 });
