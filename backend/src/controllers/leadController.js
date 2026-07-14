@@ -332,26 +332,35 @@ const bulkImportLeads = asyncHandler(async (req, res) => {
   return success(res, 201, "Import complete", { created, skipped, total: leads.length, errors });
 });
 
-// Agency only — assign many leads to one agent in a single action (separate from import)
+// Agency only — bulk-update agent and/or project for many leads in one action
 const bulkAssignLeads = asyncHandler(async (req, res) => {
-  const { leadIds, agentId } = req.body;
-  if (!Array.isArray(leadIds) || leadIds.length === 0 || !agentId) {
-    throw new ApiError(400, "leadIds (array) and agentId are required");
+  const { leadIds, agentId, project } = req.body;
+  if (!Array.isArray(leadIds) || leadIds.length === 0 || (!agentId && !project)) {
+    throw new ApiError(400, "leadIds (array) and at least one of agentId or project are required");
   }
 
   const leads = await Lead.find({ _id: { $in: leadIds }, agencyId: req.user._id, isDeleted: false });
   for (const lead of leads) {
-    lead.assignedAgent = agentId;
-    if (lead.status === "New") lead.status = "Assigned";
-    lead.timeline.push({ action: "Lead assigned to agent (bulk)", createdBy: req.user._id });
+    if (project) {
+      lead.project = project;
+      lead.timeline.push({ action: "Project updated (bulk)", createdBy: req.user._id });
+    }
+    if (agentId) {
+      lead.assignedAgent = agentId;
+      if (lead.status === "New") lead.status = "Assigned";
+      lead.timeline.push({ action: "Lead assigned to agent (bulk)", createdBy: req.user._id });
+    }
     await lead.save();
-    await notify({
-      agencyId: req.user._id, recipient: agentId, type: "AssignmentNotification",
-      title: "Lead assigned to you", message: lead.customer.name, lead: lead._id,
-    });
+
+    if (agentId) {
+      await notify({
+        agencyId: req.user._id, recipient: agentId, type: "AssignmentNotification",
+        title: "Lead assigned to you", message: lead.customer.name, lead: lead._id,
+      });
+    }
   }
 
-  return success(res, 200, "Leads assigned", { assigned: leads.length });
+  return success(res, 200, "Leads updated", { updated: leads.length });
 });
 
 module.exports = {

@@ -7,6 +7,13 @@ export const useProjects = (params = {}) =>
     queryFn: async () => (await apiClient.get("/projects", { params })).data,
   });
 
+export const useProject = (id) =>
+  useQuery({
+    queryKey: ["project", id],
+    queryFn: async () => (await apiClient.get(`/projects/${id}`)).data.data,
+    enabled: !!id,
+  });
+
 export const useCreateProject = () => {
   const qc = useQueryClient();
   return useMutation({

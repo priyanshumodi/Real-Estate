@@ -4,18 +4,20 @@ const Project = require("../models/Project");
 
 // Agency only. Agents never create/edit projects.
 const createProject = asyncHandler(async (req, res) => {
-  const { name, developerName, location, description, totalUnits, basePrice } = req.body;
+  const { name, developer, location, description, totalUnits, basePrice, purchasePrice } = req.body;
   if (!name) throw new ApiError(400, "Project name is required");
+  if (!developer) throw new ApiError(400, "Developer is required — pick an existing one or add a new one");
 
   const project = await Project.create({
     agencyId: req.user._id,
     name,
-    developerName,
+    developer,
     location,
     description,
     totalUnits: totalUnits || 0,
     availableUnits: totalUnits || 0,
     basePrice: basePrice || 0,
+    purchasePrice: purchasePrice || 0,
   });
 
   return success(res, 201, "Project created", project);
@@ -32,7 +34,7 @@ const listProjects = asyncHandler(async (req, res) => {
 
   const skip = (Number(page) - 1) * Number(limit);
   const [projects, total] = await Promise.all([
-    Project.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
+    Project.find(filter).populate("developer", "name phone email").sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
     Project.countDocuments(filter),
   ]);
 
@@ -42,7 +44,7 @@ const listProjects = asyncHandler(async (req, res) => {
 });
 
 const getProject = asyncHandler(async (req, res) => {
-  const project = await Project.findOne({ _id: req.params.id, isDeleted: false });
+  const project = await Project.findOne({ _id: req.params.id, isDeleted: false }).populate("developer");
   if (!project) throw new ApiError(404, "Project not found");
   return success(res, 200, "Project fetched", project);
 });

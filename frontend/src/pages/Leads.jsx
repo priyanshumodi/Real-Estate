@@ -50,6 +50,8 @@ const Leads = () => {
   const [importResult, setImportResult] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkAgent, setBulkAgent] = useState("");
+  const [bulkProject, setBulkProject] = useState("");
+  const [bulkError, setBulkError] = useState("");
 
   const toggleSelect = (id) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -67,10 +69,24 @@ const Leads = () => {
   };
 
   const handleBulkAssign = async () => {
-    if (!bulkAgent || selectedIds.length === 0) return;
-    await bulkAssign.mutateAsync({ leadIds: selectedIds, agentId: bulkAgent });
-    setSelectedIds([]);
-    setBulkAgent("");
+    setBulkError("");
+    if (!bulkAgent && !bulkProject) {
+      setBulkError("Pick an agent or a project above before clicking Apply.");
+      return;
+    }
+    try {
+      await bulkAssign.mutateAsync({
+        leadIds: selectedIds,
+        agentId: bulkAgent || undefined,
+        project: bulkProject || undefined,
+      });
+      setSelectedIds([]);
+      setBulkAgent("");
+      setBulkProject("");
+    } catch (err) {
+      setBulkError(err?.response?.data?.message || err?.message || "Bulk update failed — see console for details.");
+      console.error("Bulk assign failed:", err);
+    }
   };
 
   const onSubmit = async (formData) => {
@@ -121,7 +137,7 @@ const Leads = () => {
             type="file"
             accept=".csv"
             className="block text-sm"
-            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+            onChange={(e) => e.target.files && e.target.files[0] && handleFile(e.target.files[0])}
           />
           {bulkImport.isPending && <p className="text-sm text-ink-400 mt-2">Importing...</p>}
           {importResult && (
@@ -204,21 +220,34 @@ const Leads = () => {
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="bg-navy-900 text-white rounded-xl px-5 py-3 mb-4 flex items-center justify-between">
-          <p className="text-sm">{selectedIds.length} lead(s) selected</p>
-          <div className="flex gap-2 items-center">
-            <select
-              className="rounded-md px-3 py-1.5 text-sm text-ink-900"
-              value={bulkAgent}
-              onChange={(e) => setBulkAgent(e.target.value)}
-            >
-              <option value="">Assign to agent...</option>
-              {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
-            </select>
-            <Button className="!w-auto px-4" loading={bulkAssign.isPending} disabled={!bulkAgent} onClick={handleBulkAssign}>
-              Assign
-            </Button>
+        <div className="bg-navy-900 text-white rounded-xl px-5 py-3 mb-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm">{selectedIds.length} lead(s) selected</p>
+            <div className="flex gap-2 items-center">
+              <select
+                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
+                value={bulkProject}
+                onChange={(e) => setBulkProject(e.target.value)}
+              >
+                <option value="">Keep current project...</option>
+                {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+              </select>
+              <select
+                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
+                value={bulkAgent}
+                onChange={(e) => setBulkAgent(e.target.value)}
+              >
+                <option value="">Keep current agent...</option>
+                {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
+              </select>
+              <Button className="!w-auto px-4" loading={bulkAssign.isPending} onClick={handleBulkAssign}>
+                Apply
+              </Button>
+            </div>
           </div>
+          {bulkError && (
+            <p className="text-sm text-red-300 mt-2">{bulkError}</p>
+          )}
         </div>
       )}
 

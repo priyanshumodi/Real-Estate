@@ -11,6 +11,7 @@ const clientRoutes = require("./routes/clientRoutes");
 const statsRoutes = require("./routes/statsRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const developerRoutes = require("./routes/developerRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
@@ -52,6 +53,7 @@ app.use("/api/v1/clients", clientRoutes);
 app.use("/api/v1/stats", statsRoutes);
 app.use("/api/v1/bookings", bookingRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/developers", developerRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 
 // --- 404 + Error handling (always last) ---
