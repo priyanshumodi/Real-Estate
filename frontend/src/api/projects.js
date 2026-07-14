@@ -14,6 +14,27 @@ export const useProject = (id) =>
     enabled: !!id,
   });
 
+export const useUpdateUnitPrice = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ unitId, price }) =>
+      (await apiClient.patch(`/projects/${projectId}/units/${unitId}`, { price })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["project", projectId] }),
+  });
+};
+
+export const useBulkAddUnits = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload) =>
+      (await apiClient.post(`/projects/${projectId}/units/bulk`, payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project", projectId] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+};
+
 export const useCreateProject = () => {
   const qc = useQueryClient();
   return useMutation({

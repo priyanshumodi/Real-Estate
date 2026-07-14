@@ -16,7 +16,9 @@ const bookingSchema = new mongoose.Schema(
   {
     agencyId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     project: { type: mongoose.Schema.Types.ObjectId, ref: "Project", required: true },
+    unitId: { type: mongoose.Schema.Types.ObjectId, required: true }, // Project.units[]._id
     client: { type: mongoose.Schema.Types.ObjectId, ref: "Client", required: true },
+    lead: { type: mongoose.Schema.Types.ObjectId, ref: "Lead", default: null }, // set if booked straight from a lead
     unitNumber: { type: String, required: true, trim: true },
     totalAmount: { type: Number, required: true, min: 0 },
     advanceAmount: { type: Number, default: 0, min: 0 },

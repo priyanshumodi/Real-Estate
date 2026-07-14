@@ -21,7 +21,26 @@ export const useCreateBooking = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bookings"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["project"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
     },
+  });
+};
+
+// Mirrors the backend's installment math exactly, so the UI can preview the plan before submitting
+export const previewInstallments = (totalAmount, advanceAmount, planType) => {
+  const countMap = { "Full Payment": 0, "2 Installments": 2, "4 Installments": 4, "6 Installments": 6 };
+  const count = countMap[planType] ?? 0;
+  if (!count || !totalAmount) return [];
+  const remaining = totalAmount - advanceAmount;
+  const per = Math.floor(remaining / count);
+  return Array.from({ length: count }, (_, i) => {
+    const due = new Date();
+    due.setMonth(due.getMonth() + i + 1);
+    const amount = i === count - 1 ? remaining - per * (count - 1) : per;
+    return { amount, dueDate: due };
   });
 };
 
