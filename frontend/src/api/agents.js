@@ -7,6 +7,13 @@ export const useAgentsList = () =>
     queryFn: async () => (await apiClient.get("/auth/agents")).data.data,
   });
 
+export const useAgentPerformance = (id) =>
+  useQuery({
+    queryKey: ["agent-performance", id],
+    queryFn: async () => (await apiClient.get(`/auth/agents/${id}/performance`)).data.data,
+    enabled: !!id,
+  });
+
 export const useCreateAgent = () => {
   const qc = useQueryClient();
   return useMutation({

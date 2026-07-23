@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import { useAgentsList, useCreateAgent, useUpdateAgent, useDeleteAgent } from "../api/agents";
 import Button from "../components/ui/Button";
@@ -16,7 +17,7 @@ const Agents = () => {
   const { register, handleSubmit, reset, setValue } = useForm();
 
   const openCreate = () => {
-    reset({ name: "", email: "", phone: "", password: "", allowedIP: "" });
+    reset({ name: "", email: "", phone: "+91", allowedIP: "" });
     setEditingId(null);
     setShowForm(true);
   };
@@ -25,15 +26,19 @@ const Agents = () => {
     setValue("name", agent.name);
     setValue("phone", agent.phone || "");
     setValue("allowedIP", agent.allowedIP || "");
+    setValue("commissionRate", agent.commissionRate || 0);
     setEditingId(agent._id);
     setShowForm(true);
   };
 
   const onSubmit = async (formData) => {
     if (editingId) {
-      await updateAgent.mutateAsync({ id: editingId, name: formData.name, phone: formData.phone, allowedIP: formData.allowedIP });
+      await updateAgent.mutateAsync({
+        id: editingId, name: formData.name, phone: formData.phone,
+        allowedIP: formData.allowedIP, commissionRate: Number(formData.commissionRate) || 0,
+      });
     } else {
-      await createAgent.mutateAsync(formData);
+      await createAgent.mutateAsync({ ...formData, commissionRate: Number(formData.commissionRate) || 0 });
     }
     setShowForm(false);
     reset();
@@ -60,10 +65,18 @@ const Agents = () => {
       {showForm && (
         <form onSubmit={handleSubmit(onSubmit)} className="bg-white border border-gray-200 rounded-xl p-6 mb-6 grid grid-cols-2 gap-4">
           <TextField label="Name" {...register("name", { required: true })} />
-          <TextField label="Email" type="email" disabled={!!editingId} {...register("email", { required: !editingId })} />
-          <TextField label="Phone" {...register("phone")} />
-          {!editingId && <TextField label="Password" type="password" {...register("password", { required: true })} />}
+          <TextField label="Email (optional)" type="email" disabled={!!editingId} {...register("email")} />
+          <TextField
+            label="Phone (E.164 format — used for OTP login)"
+            placeholder="+919876543210"
+            disabled={!!editingId}
+            {...register("phone", { required: !editingId })}
+          />
           <TextField label="Allowed office IP (optional)" placeholder="e.g. 103.21.244.10" {...register("allowedIP")} />
+          <TextField label="Commission rate (%)" type="number" step="0.1" placeholder="e.g. 2.5" {...register("commissionRate")} />
+          <p className="col-span-2 text-xs text-ink-400 -mt-2">
+            No password needed — the agent logs in with a real-time SMS OTP sent to this phone number.
+          </p>
           <div className="col-span-2">
             <Button type="submit" loading={createAgent.isPending || updateAgent.isPending} className="!w-auto px-6">
               {editingId ? "Save changes" : "Create agent"}
@@ -79,20 +92,24 @@ const Agents = () => {
               <th className="text-left px-5 py-3">Name</th>
               <th className="text-left px-5 py-3">Email</th>
               <th className="text-left px-5 py-3">Phone</th>
+              <th className="text-left px-5 py-3">Commission</th>
               <th className="text-left px-5 py-3">Status</th>
               <th className="text-right px-5 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={5} className="px-5 py-6 text-center text-ink-400">Loading...</td></tr>}
+            {isLoading && <tr><td colSpan={6} className="px-5 py-6 text-center text-ink-400">Loading...</td></tr>}
             {!isLoading && agents?.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-6 text-center text-ink-400">No agents yet.</td></tr>
+              <tr><td colSpan={6} className="px-5 py-6 text-center text-ink-400">No agents yet.</td></tr>
             )}
             {agents?.map((agent) => (
               <tr key={agent._id} className="border-t border-gray-100">
-                <td className="px-5 py-3 font-medium text-ink-900">{agent.name}</td>
+                <td className="px-5 py-3 font-medium text-ink-900">
+                  <Link to={`/agents/${agent._id}`} className="hover:text-gold-600">{agent.name}</Link>
+                </td>
                 <td className="px-5 py-3 text-ink-600">{agent.email}</td>
                 <td className="px-5 py-3 text-ink-600">{agent.phone || "—"}</td>
+                <td className="px-5 py-3 text-ink-600">{agent.commissionRate || 0}%</td>
                 <td className="px-5 py-3">
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${agent.isActive ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"}`}>
                     {agent.isActive ? "Active" : "Inactive"}

@@ -49,6 +49,13 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Only meaningful for agents — % commission on completed bookings originating from their leads
+    commissionRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
     // For agent office-only login (geo-fencing groundwork, refined in Auth module)
     allowedIP: {
       type: String,

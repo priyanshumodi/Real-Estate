@@ -48,7 +48,7 @@ const registerAgency = asyncHandler(async (req, res) => {
  * @access  Private (agency only)
  */
 const createAgent = asyncHandler(async (req, res) => {
-  const { name, email, password, phone, allowedIP } = req.body;
+  const { name, email, password, phone, allowedIP, commissionRate } = req.body;
 
   if (!name || !email || !password) {
     throw new ApiError(400, "Name, email and password are required");
@@ -66,6 +66,7 @@ const createAgent = asyncHandler(async (req, res) => {
     phone,
     allowedIP,
     role: "agent",
+    commissionRate: commissionRate || 0,
     agencyId: req.user._id, // the logged-in Agency
   });
 
@@ -130,11 +131,11 @@ const listAgents = asyncHandler(async (req, res) => {
  * @access  Private (agency only)
  */
 const updateAgent = asyncHandler(async (req, res) => {
-  const { name, phone, allowedIP, isActive } = req.body;
+  const { name, phone, allowedIP, isActive, commissionRate } = req.body;
 
   const agent = await User.findOneAndUpdate(
     { _id: req.params.id, role: "agent", agencyId: req.user._id, isDeleted: false },
-    { name, phone, allowedIP, isActive },
+    { name, phone, allowedIP, isActive, commissionRate },
     { new: true, runValidators: true }
   );
   if (!agent) throw new ApiError(404, "Agent not found");
@@ -167,6 +168,7 @@ const sanitizeUser = (user) => ({
   agencyId: user.agencyId,
   phone: user.phone,
   isActive: user.isActive,
+  commissionRate: user.commissionRate,
 });
 
 module.exports = { registerAgency, createAgent, login, getMe, listAgents, updateAgent, deleteAgent };
