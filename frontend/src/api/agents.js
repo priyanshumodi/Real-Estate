@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import apiClient from "./client";
 
-export const useAgentsList = () =>
+export const useAgentsList = (params = {}) =>
   useQuery({
-    queryKey: ["agents"],
-    queryFn: async () => (await apiClient.get("/auth/agents")).data.data,
+    queryKey: ["agents", params],
+    queryFn: async () => (await apiClient.get("/auth/agents", { params })).data,
   });
 
 export const useAgentPerformance = (id) =>

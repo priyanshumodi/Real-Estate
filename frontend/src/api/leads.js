@@ -84,6 +84,6 @@ export const useAssignAgent = (id) => {
 
 export const useAgents = () =>
   useQuery({
-    queryKey: ["agents"],
-    queryFn: async () => (await apiClient.get("/auth/agents")).data.data,
+    queryKey: ["agents", "all"],
+    queryFn: async () => (await apiClient.get("/auth/agents", { params: { limit: 1000 } })).data.data,
   });

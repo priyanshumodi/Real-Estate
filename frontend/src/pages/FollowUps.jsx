@@ -4,6 +4,7 @@ import AppLayout from "../components/layout/AppLayout";
 import { useFollowUps, usePerformFollowUp } from "../api/followups";
 import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
+import Pagination from "../components/ui/Pagination";
 
 const METHODS = ["Phone", "WhatsApp", "SMS", "Email", "Office Meeting", "Site Visit"];
 const STATUS_OPTIONS = [
@@ -14,7 +15,9 @@ const STATUS_OPTIONS = [
 const FollowUps = () => {
   const { user } = useAuth();
   const isAgent = user?.role === "agent";
-  const { data: followUps, isLoading } = useFollowUps();
+  const [page, setPage] = useState(1);
+  const { data: followUpsData, isLoading } = useFollowUps({ page, limit: 20 });
+  const followUps = followUpsData?.data;
   const performFollowUp = usePerformFollowUp();
   const [openId, setOpenId] = useState(null);
   const [form, setForm] = useState({ method: "Phone", remarks: "", response: "Neutral", newStatus: "" });
@@ -140,6 +143,7 @@ const FollowUps = () => {
             })}
           </tbody>
         </table>
+        <Pagination meta={followUpsData?.meta} onPageChange={setPage} />
       </div>
     </AppLayout>
   );

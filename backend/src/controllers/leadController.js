@@ -221,6 +221,7 @@ const addVisitStep = asyncHandler(async (req, res) => {
 // Aggregated follow-up tracker across all leads (agency: all; agent: own leads only)
 const listFollowUps = asyncHandler(async (req, res) => {
   const agencyId = scopedAgencyId(req.user);
+  const { page = 1, limit = 20 } = req.query;
   const filter = { agencyId, isDeleted: false, "followUps.0": { $exists: true } };
   if (req.user.role === "agent") filter.assignedAgent = req.user._id;
 
@@ -229,10 +230,10 @@ const listFollowUps = asyncHandler(async (req, res) => {
     .populate("project", "name")
     .populate("assignedAgent", "name");
 
-  const followUps = [];
+  const allFollowUps = [];
   leads.forEach((lead) => {
     lead.followUps.forEach((f) => {
-      followUps.push({
+      allFollowUps.push({
         _id: f._id,
         leadId: lead._id,
         customerName: lead.customer.name,
@@ -245,8 +246,15 @@ const listFollowUps = asyncHandler(async (req, res) => {
     });
   });
 
-  followUps.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
-  return success(res, 200, "Follow-ups fetched", followUps);
+  allFollowUps.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+
+  const total = allFollowUps.length;
+  const skip = (Number(page) - 1) * Number(limit);
+  const followUps = allFollowUps.slice(skip, skip + Number(limit));
+
+  return success(res, 200, "Follow-ups fetched", followUps, {
+    total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / limit) || 1,
+  });
 });
 
 // Perform a scheduled follow-up: log what happened, optionally move the lead's

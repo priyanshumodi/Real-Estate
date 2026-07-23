@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import { useClients } from "../api/clients";
+import Pagination from "../components/ui/Pagination";
 
 const Clients = () => {
   const [search, setSearch] = useState("");
-  const { data, isLoading } = useClients({ search });
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useClients({ search, page, limit: 20 });
 
   return (
     <AppLayout>
@@ -16,7 +18,7 @@ const Clients = () => {
         placeholder="Search name or phone..."
         className="rounded-md border border-gray-300 px-3.5 py-2 text-sm w-80 mb-4"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
       />
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -48,6 +50,7 @@ const Clients = () => {
             ))}
           </tbody>
         </table>
+        <Pagination meta={data?.meta} onPageChange={setPage} />
       </div>
     </AppLayout>
   );

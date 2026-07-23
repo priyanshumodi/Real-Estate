@@ -119,10 +119,30 @@ const getMe = asyncHandler(async (req, res) => {
  * @access  Private (agency only)
  */
 const listAgents = asyncHandler(async (req, res) => {
-  const agents = await User.find({ role: "agent", agencyId: req.user._id, isDeleted: false }).select(
-    "name email phone isActive"
-  );
-  return success(res, 200, "Agents fetched", agents);
+  const { search, page = 1, limit = 20 } = req.query;
+
+  const filter = { role: "agent", agencyId: req.user._id, isDeleted: false };
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+      { phone: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [agents, total] = await Promise.all([
+    User.find(filter)
+      .select("name email phone isActive commissionRate")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit)),
+    User.countDocuments(filter),
+  ]);
+
+  return success(res, 200, "Agents fetched", agents, {
+    total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / limit) || 1,
+  });
 });
 
 /**

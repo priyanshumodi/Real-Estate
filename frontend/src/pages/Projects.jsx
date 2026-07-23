@@ -7,6 +7,7 @@ import { useDevelopers, useCreateDeveloper } from "../api/developers";
 import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
 import TextField from "../components/ui/TextField";
+import Pagination from "../components/ui/Pagination";
 
 const Projects = () => {
   const { user } = useAuth();
@@ -15,7 +16,8 @@ const Projects = () => {
   const [newDevName, setNewDevName] = useState("");
   const [newDevPhone, setNewDevPhone] = useState("");
 
-  const { data, isLoading } = useProjects();
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useProjects({ page, limit: 20 });
   const { data: developers } = useDevelopers();
   const createProject = useCreateProject();
   const createDeveloper = useCreateDeveloper();
@@ -32,7 +34,8 @@ const Projects = () => {
     const res = await createDeveloper.mutateAsync({ name: newDevName, phone: newDevPhone });
     setValue("developer", res.data._id);
     setShowNewDeveloper(false);
-    setNewDevName(""); setNewDevPhone("");
+    setNewDevName("");
+    setNewDevPhone("");
   };
 
   return (
@@ -59,7 +62,11 @@ const Projects = () => {
               <div className="flex gap-2">
                 <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("developer", { required: true })}>
                   <option value="">Select developer</option>
-                  {developers?.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
+                  {developers?.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name}
+                    </option>
+                  ))}
                 </select>
                 <button type="button" onClick={() => setShowNewDeveloper(true)} className="text-xs text-navy-900 whitespace-nowrap font-medium hover:text-gold-600">
                   + New
@@ -111,18 +118,32 @@ const Projects = () => {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="px-5 py-6 text-center text-ink-400">Loading...</td></tr>}
+            {isLoading && (
+              <tr>
+                <td colSpan={6} className="px-5 py-6 text-center text-ink-400">
+                  Loading...
+                </td>
+              </tr>
+            )}
             {!isLoading && data?.data?.length === 0 && (
-              <tr><td colSpan={6} className="px-5 py-6 text-center text-ink-400">No projects yet.</td></tr>
+              <tr>
+                <td colSpan={6} className="px-5 py-6 text-center text-ink-400">
+                  No projects yet.
+                </td>
+              </tr>
             )}
             {data?.data?.map((p) => (
               <tr key={p._id} className="border-t border-gray-100 hover:bg-gray-50">
                 <td className="px-5 py-3">
-                  <Link to={`/projects/${p._id}`} className="font-medium text-ink-900 hover:text-gold-600">{p.name}</Link>
+                  <Link to={`/projects/${p._id}`} className="font-medium text-ink-900 hover:text-gold-600">
+                    {p.name}
+                  </Link>
                 </td>
                 <td className="px-5 py-3 text-ink-600">{p.developer?.name || "—"}</td>
                 <td className="px-5 py-3 text-ink-600">{p.location || "—"}</td>
-                <td className="px-5 py-3 text-ink-600">{p.availableUnits}/{p.totalUnits}</td>
+                <td className="px-5 py-3 text-ink-600">
+                  {p.availableUnits}/{p.totalUnits}
+                </td>
                 <td className="px-5 py-3 text-ink-600">₹{(p.purchasePrice || 0).toLocaleString()}</td>
                 <td className="px-5 py-3">
                   <span className="text-xs px-2 py-1 rounded-full bg-gold-500/10 text-gold-600 font-medium">
@@ -133,6 +154,7 @@ const Projects = () => {
             ))}
           </tbody>
         </table>
+        <Pagination meta={data?.meta} onPageChange={setPage} />
       </div>
     </AppLayout>
   );

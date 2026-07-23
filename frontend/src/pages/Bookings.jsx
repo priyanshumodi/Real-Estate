@@ -7,6 +7,7 @@ import { useProjects, useProject } from "../api/projects";
 import { useClients } from "../api/clients";
 import { useLeads } from "../api/leads";
 import Button from "../components/ui/Button";
+import Pagination from "../components/ui/Pagination";
 
 const statusColor = {
   Reserved: "bg-blue-50 text-blue-600",
@@ -29,11 +30,12 @@ const Bookings = () => {
   const [planType, setPlanType] = useState("Full Payment");
   const [formError, setFormError] = useState("");
 
-  const { data, isLoading } = useBookings();
-  const { data: projectsData } = useProjects();
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useBookings({ page, limit: 20 });
+  const { data: projectsData } = useProjects({ limit: 1000 });
   const { data: selectedProject } = useProject(selectedProjectId);
-  const { data: clientsData } = useClients();
-  const { data: leadsData } = useLeads({ status: "" });
+  const { data: clientsData } = useClients({ limit: 1000 });
+  const { data: leadsData } = useLeads({ status: "", limit: 1000 });
   const createBooking = useCreateBooking();
   const { register, handleSubmit, reset, setValue } = useForm();
 
@@ -221,6 +223,7 @@ const Bookings = () => {
             ))}
           </tbody>
         </table>
+        <Pagination meta={data?.meta} onPageChange={setPage} />
       </div>
     </AppLayout>
   );

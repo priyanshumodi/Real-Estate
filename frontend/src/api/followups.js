@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import apiClient from "./client";
 
-export const useFollowUps = () =>
+export const useFollowUps = (params = {}) =>
   useQuery({
-    queryKey: ["followups"],
-    queryFn: async () => (await apiClient.get("/leads/followups")).data.data,
+    queryKey: ["followups", params],
+    queryFn: async () => (await apiClient.get("/leads/followups", { params })).data,
   });
 
 export const usePerformFollowUp = () => {

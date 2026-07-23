@@ -5,9 +5,12 @@ import AppLayout from "../components/layout/AppLayout";
 import { useAgentsList, useCreateAgent, useUpdateAgent, useDeleteAgent } from "../api/agents";
 import Button from "../components/ui/Button";
 import TextField from "../components/ui/TextField";
+import Pagination from "../components/ui/Pagination";
 
 const Agents = () => {
-  const { data: agents, isLoading } = useAgentsList();
+  const [page, setPage] = useState(1);
+  const { data: agentsData, isLoading } = useAgentsList({ page, limit: 20 });
+  const agents = agentsData?.data;
   const createAgent = useCreateAgent();
   const updateAgent = useUpdateAgent();
   const deleteAgent = useDeleteAgent();
@@ -123,6 +126,7 @@ const Agents = () => {
             ))}
           </tbody>
         </table>
+        <Pagination meta={agentsData?.meta} onPageChange={setPage} />
       </div>
     </AppLayout>
   );

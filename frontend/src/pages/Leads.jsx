@@ -8,6 +8,7 @@ import Papa from "papaparse";
 import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
 import TextField from "../components/ui/TextField";
+import Pagination from "../components/ui/Pagination";
 
 const STATUS_OPTIONS = [
   "New", "Assigned", "Contacted", "Follow-up", "Visit Scheduled", "Visit Started",
@@ -37,8 +38,9 @@ const Leads = () => {
   const [filters, setFilters] = useState({ status: "", priority: "", search: "" });
   const [showForm, setShowForm] = useState(false);
 
-  const { data, isLoading } = useLeads(filters);
-  const { data: projectsData } = useProjects();
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useLeads({ ...filters, page, limit: 20 });
+  const { data: projectsData } = useProjects({ limit: "1000" });
   const { data: agents } = useAgents();
   const createLead = useCreateLead();
   const bulkImport = useBulkImportLeads();
@@ -137,7 +139,7 @@ const Leads = () => {
             type="file"
             accept=".csv"
             className="block text-sm"
-            onChange={(e) => e.target.files && e.target.files[0] && handleFile(e.target.files[0])}
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
           {bulkImport.isPending && <p className="text-sm text-ink-400 mt-2">Importing...</p>}
           {importResult && (
@@ -199,12 +201,12 @@ const Leads = () => {
           placeholder="Search name or phone..."
           className="rounded-md border border-gray-300 px-3.5 py-2 text-sm flex-1"
           value={filters.search}
-          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+          onChange={(e) => { setFilters((f) => ({ ...f, search: e.target.value })); setPage(1); }}
         />
         <select
           className="rounded-md border border-gray-300 px-3.5 py-2 text-sm"
           value={filters.status}
-          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+          onChange={(e) => { setFilters((f) => ({ ...f, status: e.target.value })); setPage(1); }}
         >
           <option value="">All statuses</option>
           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -212,7 +214,7 @@ const Leads = () => {
         <select
           className="rounded-md border border-gray-300 px-3.5 py-2 text-sm"
           value={filters.priority}
-          onChange={(e) => setFilters((f) => ({ ...f, priority: e.target.value }))}
+          onChange={(e) => { setFilters((f) => ({ ...f, priority: e.target.value })); setPage(1); }}
         >
           <option value="">All priorities</option>
           <option>Hot</option><option>Warm</option><option>Cold</option>
@@ -224,25 +226,25 @@ const Leads = () => {
           <div className="flex items-center justify-between">
             <p className="text-sm">{selectedIds.length} lead(s) selected</p>
             <div className="flex gap-2 items-center">
-              <select
-                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
-                value={bulkProject}
-                onChange={(e) => setBulkProject(e.target.value)}
-              >
-                <option value="">Keep current project...</option>
-                {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
-              </select>
-              <select
-                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
-                value={bulkAgent}
-                onChange={(e) => setBulkAgent(e.target.value)}
-              >
-                <option value="">Keep current agent...</option>
-                {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
-              </select>
-              <Button className="!w-auto px-4" loading={bulkAssign.isPending} onClick={handleBulkAssign}>
-                Apply
-              </Button>
+            <select
+              className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
+              value={bulkProject}
+              onChange={(e) => setBulkProject(e.target.value)}
+            >
+              <option value="">Keep current project...</option>
+              {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+            </select>
+            <select
+              className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
+              value={bulkAgent}
+              onChange={(e) => setBulkAgent(e.target.value)}
+            >
+              <option value="">Keep current agent...</option>
+              {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
+            </select>
+            <Button className="!w-auto px-4" loading={bulkAssign.isPending} onClick={handleBulkAssign}>
+              Apply
+            </Button>
             </div>
           </div>
           {bulkError && (
@@ -311,6 +313,7 @@ const Leads = () => {
             ))}
           </tbody>
         </table>
+        <Pagination meta={data?.meta} onPageChange={setPage} />
       </div>
     </AppLayout>
   );
