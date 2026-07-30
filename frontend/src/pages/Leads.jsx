@@ -21,16 +21,53 @@ const priorityColor = {
   Cold: "bg-blue-50 text-blue-600",
 };
 
-// Renders one response as a small colored badge — same idea as a sports "Last 5" form guide
-const ResponseBadge = ({ response }) => {
-  if (response === "Positive") {
-    return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs font-bold">✓</span>;
-  }
-  if (response === "Negative") {
-    return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-xs font-bold">✕</span>;
-  }
-  return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs font-bold">–</span>;
+// Small line-icon per communication channel — reused inside the response badge below.
+const METHOD_ICON_PATH = {
+  Phone: <path d="M6.62 10.79a15.1 15.1 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01z" />,
+  WhatsApp: <path d="M12 3a9 9 0 0 0-7.75 13.5L3 21l4.5-1.25A9 9 0 1 0 12 3z" />,
+  SMS: <path d="M4 4h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 4v-4H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />,
+  Email: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" fill="none" strokeWidth="1.8" />
+      <path d="M3 7l9 6 9-6" fill="none" strokeWidth="1.8" />
+    </>
+  ),
+  "Office Meeting": (
+    <>
+      <rect x="5" y="3" width="14" height="18" fill="none" strokeWidth="1.8" />
+      <circle cx="9" cy="7.5" r="0.9" />
+      <circle cx="15" cy="7.5" r="0.9" />
+      <circle cx="9" cy="12" r="0.9" />
+      <circle cx="15" cy="12" r="0.9" />
+    </>
+  ),
+  "Site Visit": (
+    <>
+      <path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z" fill="none" strokeWidth="1.8" />
+      <circle cx="12" cy="10" r="2.3" fill="none" strokeWidth="1.8" />
+    </>
+  ),
 };
+
+const responseStyle = {
+  Positive: "bg-green-100 text-green-600",
+  Negative: "bg-red-100 text-red-600",
+  Neutral: "bg-gray-100 text-gray-500",
+};
+
+// Shows which channel a contact happened on, tinted by how it went — replaces the old
+// generic checkmark/cross so the "Last 5" strip reads like "Phone: positive, Email: negative"
+// at a glance instead of just a row of ticks and crosses.
+const ResponseBadge = ({ method, response }) => (
+  <span
+    title={`${method || "Unknown"} · ${response}`}
+    className={`inline-flex items-center justify-center w-5 h-5 rounded-full ${responseStyle[response] || responseStyle.Neutral}`}
+  >
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+      {METHOD_ICON_PATH[method] || <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />}
+    </svg>
+  </span>
+);
 
 const Leads = () => {
   const { user } = useAuth();
@@ -226,25 +263,25 @@ const Leads = () => {
           <div className="flex items-center justify-between">
             <p className="text-sm">{selectedIds.length} lead(s) selected</p>
             <div className="flex gap-2 items-center">
-            <select
-              className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
-              value={bulkProject}
-              onChange={(e) => setBulkProject(e.target.value)}
-            >
-              <option value="">Keep current project...</option>
-              {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
-            </select>
-            <select
-              className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
-              value={bulkAgent}
-              onChange={(e) => setBulkAgent(e.target.value)}
-            >
-              <option value="">Keep current agent...</option>
-              {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
-            </select>
-            <Button className="!w-auto px-4" loading={bulkAssign.isPending} onClick={handleBulkAssign}>
-              Apply
-            </Button>
+              <select
+                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
+                value={bulkProject}
+                onChange={(e) => setBulkProject(e.target.value)}
+              >
+                <option value="">Keep current project...</option>
+                {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+              </select>
+              <select
+                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
+                value={bulkAgent}
+                onChange={(e) => setBulkAgent(e.target.value)}
+              >
+                <option value="">Keep current agent...</option>
+                {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
+              </select>
+              <Button className="!w-auto px-4" loading={bulkAssign.isPending} onClick={handleBulkAssign}>
+                Apply
+              </Button>
             </div>
           </div>
           {bulkError && (
@@ -302,7 +339,9 @@ const Leads = () => {
                 <td className="px-5 py-3">
                   <div className="flex gap-1">
                     {lead.recentResponses?.length > 0 ? (
-                      lead.recentResponses.map((r, i) => <ResponseBadge key={i} response={r} />)
+                      lead.recentResponses.map((r, i) => (
+                        <ResponseBadge key={i} method={r.method} response={r.response} />
+                      ))
                     ) : (
                       <span className="text-xs text-ink-400">No activity</span>
                     )}

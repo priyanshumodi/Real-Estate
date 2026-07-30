@@ -66,10 +66,14 @@ const listLeads = asyncHandler(async (req, res) => {
     Lead.countDocuments(filter),
   ]);
 
-  // Last 5 communication responses, oldest→newest (same idea as a sports "Last 5" form guide)
+  // Last 5 communications, oldest→newest (same idea as a sports "Last 5" form guide) —
+  // include method alongside response so the UI can show which channel got which reaction.
   const leads = leadsRaw.map((lead) => ({
     ...lead,
-    recentResponses: (lead.communicationLogs || []).slice(-5).map((c) => c.response),
+    recentResponses: (lead.communicationLogs || []).slice(-5).map((c) => ({
+      method: c.method,
+      response: c.response,
+    })),
   }));
 
   return success(res, 200, "Leads fetched", leads, {
