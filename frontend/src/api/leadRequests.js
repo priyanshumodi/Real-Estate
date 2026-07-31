@@ -15,6 +15,15 @@ export const useLeadRequests = (params = {}) =>
     queryFn: async () => (await apiClient.get("/lead-requests", { params })).data,
   });
 
+// Detail view — includes `existingLead` (null if no match) so the UI can show
+// "this lead already exists, currently assigned to X" before the agency decides.
+export const useLeadRequestDetail = (id) =>
+  useQuery({
+    queryKey: ["lead-requests", "detail", id],
+    queryFn: async () => (await apiClient.get(`/lead-requests/${id}`)).data,
+    enabled: !!id,
+  });
+
 export const useCreateLeadRequest = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -27,6 +36,18 @@ export const useAcceptLeadRequest = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id) => (await apiClient.patch(`/lead-requests/${id}/accept`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-requests"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+};
+
+export const useReassignLeadRequest = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, agentId }) =>
+      (await apiClient.patch(`/lead-requests/${id}/reassign`, { agentId })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-requests"] });
       qc.invalidateQueries({ queryKey: ["leads"] });

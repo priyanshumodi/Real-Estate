@@ -4,12 +4,15 @@ import AppLayout from "../components/layout/AppLayout";
 import {
   useMyLeadRequests,
   useLeadRequests,
+  useLeadRequestDetail,
   useCreateLeadRequest,
   useAcceptLeadRequest,
+  useReassignLeadRequest,
   useRejectLeadRequest,
   useCancelLeadRequest,
 } from "../api/leadRequests";
 import { useProjects } from "../api/projects";
+import { useAgents } from "../api/leads";
 import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
 import TextField from "../components/ui/TextField";
@@ -33,6 +36,7 @@ const LeadRequests = () => {
   const [error, setError] = useState("");
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [openId, setOpenId] = useState(null);
 
   const params = { page, limit: 20, ...(statusTab !== "All" ? { status: statusTab } : {}) };
   const myRequests = useMyLeadRequests(params);
@@ -41,7 +45,6 @@ const LeadRequests = () => {
 
   const { data: projectsData } = useProjects({ limit: "1000" });
   const createRequest = useCreateLeadRequest();
-  const acceptRequest = useAcceptLeadRequest();
   const rejectRequest = useRejectLeadRequest();
   const cancelRequest = useCancelLeadRequest();
   const { register, handleSubmit, reset } = useForm();
@@ -64,15 +67,6 @@ const LeadRequests = () => {
       setShowForm(false);
     } catch (err) {
       setError(err?.response?.data?.message || "Could not submit the request.");
-    }
-  };
-
-  const handleAccept = async (id) => {
-    setError("");
-    try {
-      await acceptRequest.mutateAsync(id);
-    } catch (err) {
-      setError(err?.response?.data?.message || "Could not accept the request.");
     }
   };
 
@@ -200,7 +194,11 @@ const LeadRequests = () => {
               </tr>
             )}
             {data?.data?.map((r) => (
-              <tr key={r._id} className="border-t border-gray-100">
+              <tr
+                key={r._id}
+                onClick={() => setOpenId(r._id)}
+                className="border-t border-gray-100 cursor-pointer hover:bg-gray-50"
+              >
                 <td className="px-5 py-3">
                   <p className="font-medium text-ink-900">{r.customer.name}</p>
                   <p className="text-xs text-ink-400">{r.customer.phone}</p>
@@ -217,15 +215,14 @@ const LeadRequests = () => {
                   )}
                 </td>
                 <td className="px-5 py-3 text-ink-600">{new Date(r.createdAt).toLocaleDateString()}</td>
-                <td className="px-5 py-3">
+                <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
                   {isAgency && r.status === "Pending" && (
                     <div className="flex gap-2">
                       <Button
                         className="!w-auto px-3 !py-1.5 text-xs"
-                        loading={acceptRequest.isPending}
-                        onClick={() => handleAccept(r._id)}
+                        onClick={() => setOpenId(r._id)}
                       >
-                        Accept
+                        Review
                       </Button>
                       {rejectingId === r._id ? (
                         <div className="flex gap-1 items-center">
@@ -273,7 +270,174 @@ const LeadRequests = () => {
         </table>
         <Pagination meta={data?.meta} onPageChange={setPage} />
       </div>
+
+      {openId && (
+        <RequestDetailModal
+          id={openId}
+          isAgency={isAgency}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </AppLayout>
+  );
+};
+
+// Fetches the request + existing-lead check on open. If a lead already exists for
+// this phone+project, the agency sees its status/current agent and a Reassign
+// control instead of the usual Accept button.
+const RequestDetailModal = ({ id, isAgency, onClose }) => {
+  const { data, isLoading } = useLeadRequestDetail(id);
+  const { data: agents } = useAgents(isAgency);
+  const acceptRequest = useAcceptLeadRequest();
+  const reassignRequest = useReassignLeadRequest();
+  const rejectRequest = useRejectLeadRequest();
+  const [reason, setReason] = useState("");
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [actionError, setActionError] = useState("");
+
+  const request = data?.data?.request;
+  const existingLead = data?.data?.existingLead;
+
+  const handleAccept = async () => {
+    setActionError("");
+    try {
+      await acceptRequest.mutateAsync(id);
+      onClose();
+    } catch (err) {
+      setActionError(err?.response?.data?.message || "Could not accept the request.");
+    }
+  };
+
+  const handleReassign = async () => {
+    setActionError("");
+    try {
+      await reassignRequest.mutateAsync({ id, agentId: selectedAgent || undefined });
+      onClose();
+    } catch (err) {
+      setActionError(err?.response?.data?.message || "Could not reassign the lead.");
+    }
+  };
+
+  const handleReject = async () => {
+    await rejectRequest.mutateAsync({ id, reason: reason || undefined });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl border border-gray-200 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isLoading || !request ? (
+          <p className="text-sm text-ink-400 py-6 text-center">Loading...</p>
+        ) : (
+          <>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="font-display text-lg text-ink-900">{request.customer.name}</h2>
+                <p className="text-xs text-ink-400">
+                  {request.customer.phone} · {request.project?.name}
+                </p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[request.status]}`}>
+                {request.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+              <p>
+                <span className="text-ink-400">Priority: </span>
+                {request.priority}
+              </p>
+              <p>
+                <span className="text-ink-400">Source: </span>
+                {request.source}
+              </p>
+              {isAgency && (
+                <p>
+                  <span className="text-ink-400">Requested by: </span>
+                  {request.requestedBy?.name}
+                </p>
+              )}
+              <p>
+                <span className="text-ink-400">Submitted: </span>
+                {new Date(request.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+
+            {actionError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-2.5 mb-4">
+                {actionError}
+              </div>
+            )}
+
+            {/* This is the "does this lead already exist?" check the agency needs before deciding. */}
+            {existingLead ? (
+              <div className="bg-gold-500/5 border border-gold-500/20 rounded-lg p-4 mb-4">
+                <p className="text-sm font-medium text-ink-900 mb-1">This lead already exists for this project</p>
+                <p className="text-sm text-ink-600">
+                  Status: <span className="font-medium">{existingLead.status}</span> · Currently assigned to{" "}
+                  <span className="font-medium">{existingLead.assignedAgent?.name || "nobody yet"}</span>
+                </p>
+                {isAgency && request.status === "Pending" && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <select
+                      className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      value={selectedAgent}
+                      onChange={(e) => setSelectedAgent(e.target.value)}
+                    >
+                      <option value="">Reassign to requesting agent ({request.requestedBy?.name})</option>
+                      {agents?.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      className="!w-auto px-4"
+                      loading={reassignRequest.isPending}
+                      onClick={handleReassign}
+                    >
+                      Reassign
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              isAgency &&
+              request.status === "Pending" && (
+                <Button className="!w-auto px-6 mb-4" loading={acceptRequest.isPending} onClick={handleAccept}>
+                  Accept — create and assign lead
+                </Button>
+              )
+            )}
+
+            {isAgency && request.status === "Pending" && (
+              <div className="border-t border-gray-100 pt-4">
+                <label className="block text-xs text-ink-400 mb-1.5">Reject with a reason (optional)</label>
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                  <Button
+                    variant="ghost"
+                    loading={rejectRequest.isPending}
+                    className="!w-auto px-4"
+                    onClick={handleReject}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 };
 

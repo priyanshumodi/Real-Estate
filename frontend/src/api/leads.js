@@ -82,8 +82,11 @@ export const useAssignAgent = (id) => {
   });
 };
 
-export const useAgents = () =>
+// Used for assign/bulk-assign dropdowns, which need every agent, not one page —
+// the agents list endpoint is paginated, so ask for a high limit here.
+export const useAgents = (enabled = true) =>
   useQuery({
     queryKey: ["agents", "all"],
     queryFn: async () => (await apiClient.get("/auth/agents", { params: { limit: 1000 } })).data.data,
+    enabled,
   });
