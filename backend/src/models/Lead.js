@@ -96,6 +96,14 @@ leadSchema.index({ project: 1 });
 leadSchema.index({ "customer.phone": 1 });
 leadSchema.index({ "customer.name": "text" });
 
+// A phone number can only have one active lead within the same project —
+// the same phone CAN appear again for a different project. Partial index so
+// soft-deleted leads (isDeleted: true) don't count toward the uniqueness check.
+leadSchema.index(
+  { agencyId: 1, project: 1, "customer.phone": 1 },
+  { unique: true, partialFilterExpression: { isDeleted: false } }
+);
+
 module.exports = mongoose.model("Lead", leadSchema);
 module.exports.LEAD_STATUSES = LEAD_STATUSES;
 module.exports.VISIT_STEPS = VISIT_STEPS;

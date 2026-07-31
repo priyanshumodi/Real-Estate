@@ -96,7 +96,10 @@ const Leads = () => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const handleFile = (file) => {
-    if (!importProject) { alert("Pick a project first — the whole file will be imported into it."); return; }
+    if (!importProject) {
+      alert("Pick a project first — the whole file will be imported into it.");
+      return;
+    }
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -128,16 +131,23 @@ const Leads = () => {
     }
   };
 
+  const [createError, setCreateError] = useState("");
+
   const onSubmit = async (formData) => {
-    await createLead.mutateAsync({
-      project: formData.project,
-      customer: { name: formData.name, phone: formData.phone, email: formData.email },
-      source: formData.source,
-      priority: formData.priority,
-      assignedAgent: formData.assignedAgent || undefined,
-    });
-    reset();
-    setShowForm(false);
+    setCreateError("");
+    try {
+      await createLead.mutateAsync({
+        project: formData.project,
+        customer: { name: formData.name, phone: formData.phone, email: formData.email },
+        source: formData.source,
+        priority: formData.priority,
+        assignedAgent: formData.assignedAgent || undefined,
+      });
+      reset();
+      setShowForm(false);
+    } catch (err) {
+      setCreateError(err?.response?.data?.message || "Could not create the lead.");
+    }
   };
 
   return (
@@ -170,7 +180,9 @@ const Leads = () => {
             onChange={(e) => setImportProject(e.target.value)}
           >
             <option value="">Select project for this batch</option>
-            {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
+            {projectsData?.data?.map((p) => (
+              <option key={p._id} value={p._id}>{p.name}</option>
+            ))}
           </select>
           <input
             type="file"
@@ -228,6 +240,7 @@ const Leads = () => {
             </select>
           </div>
           <div className="col-span-2">
+            {createError && <p className="text-sm text-red-500 mb-2">{createError}</p>}
             <Button type="submit" loading={createLead.isPending} className="!w-auto px-6">Save lead</Button>
           </div>
         </form>
@@ -304,9 +317,19 @@ const Leads = () => {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={user?.role === "agency" ? 7 : 6} className="px-5 py-6 text-center text-ink-400">Loading...</td></tr>}
+            {isLoading && (
+              <tr>
+                <td colSpan={user?.role === "agency" ? 7 : 6} className="px-5 py-6 text-center text-ink-400">
+                  Loading...
+                </td>
+              </tr>
+            )}
             {!isLoading && data?.data?.length === 0 && (
-              <tr><td colSpan={user?.role === "agency" ? 7 : 6} className="px-5 py-6 text-center text-ink-400">No leads found.</td></tr>
+              <tr>
+                <td colSpan={user?.role === "agency" ? 7 : 6} className="px-5 py-6 text-center text-ink-400">
+                  No leads found.
+                </td>
+              </tr>
             )}
             {data?.data?.map((lead) => (
               <tr

@@ -13,10 +13,18 @@ const createLead = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Project, customer name and phone are required");
   }
 
+  // One active lead per phone number per project — the same phone can still have
+  // a separate lead in a different project (see the partial unique index on Lead).
+  const phone = customer.phone.trim();
+  const existing = await Lead.findOne({ agencyId: req.user._id, project, "customer.phone": phone, isDeleted: false });
+  if (existing) {
+    throw new ApiError(409, "A lead for this phone number already exists in this project.");
+  }
+
   const lead = await Lead.create({
     agencyId: req.user._id,
     project,
-    customer,
+    customer: { ...customer, phone },
     source,
     assignedAgent: assignedAgent || null,
     priority: priority || "Warm",

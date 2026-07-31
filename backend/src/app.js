@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const leadRoutes = require("./routes/leadRoutes");
+const leadRequestRoutes = require("./routes/leadRequestRoutes");
 const clientRoutes = require("./routes/clientRoutes");
 const statsRoutes = require("./routes/statsRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
@@ -49,6 +50,7 @@ app.get("/api/v1/health", (req, res) => {
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/projects", projectRoutes);
 app.use("/api/v1/leads", leadRoutes);
+app.use("/api/v1/lead-requests", leadRequestRoutes);
 app.use("/api/v1/clients", clientRoutes);
 app.use("/api/v1/stats", statsRoutes);
 app.use("/api/v1/bookings", bookingRoutes);
