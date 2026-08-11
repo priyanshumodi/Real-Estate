@@ -8,21 +8,49 @@ const notify = require("../utils/notify");
 
 const scopedAgencyId = (user) => (user.role === "agency" ? user._id : user.agencyId);
 
-// Splits totalAmount (minus advance) into N equal installments, one per month
+// Construction-linked-plan style milestones — percentages of the REMAINING amount
+// (total minus advance), not equal shares. Mirrors how real developer payment
+// schedules are structured: bigger chunks tied to construction start/slab work,
+// smaller ones toward the end. Kept in sync with the frontend's `previewInstallments`
+// in `api/bookings.js` — if you change these percentages, update that copy too.
+const MILESTONE_PLANS = {
+  "2 Installments": [
+    { milestone: "On Construction Start", percent: 50 },
+    { milestone: "On Possession", percent: 50 },
+  ],
+  "4 Installments": [
+    { milestone: "On Construction Start", percent: 30 },
+    { milestone: "On Slab Completion", percent: 30 },
+    { milestone: "On Finishing Work", percent: 20 },
+    { milestone: "On Possession", percent: 20 },
+  ],
+  "6 Installments": [
+    { milestone: "On Construction Start", percent: 20 },
+    { milestone: "On Plinth Completion", percent: 15 },
+    { milestone: "On Slab Completion (Mid Floor)", percent: 20 },
+    { milestone: "On Slab Completion (Top Floor)", percent: 15 },
+    { milestone: "On Finishing & Fit-out", percent: 15 },
+    { milestone: "On Possession", percent: 15 },
+  ],
+};
+
+// Splits (totalAmount - advanceAmount) across the plan's milestones by their fixed
+// percentages — NOT equal shares. The last milestone absorbs the rounding remainder
+// so the installments always sum exactly to the remaining amount.
 const buildInstallments = (totalAmount, advanceAmount, planType) => {
-  const countMap = { "Full Payment": 0, "2 Installments": 2, "4 Installments": 4, "6 Installments": 6 };
-  const count = countMap[planType] ?? 0;
-  if (count === 0) return [];
+  const stages = MILESTONE_PLANS[planType];
+  if (!stages) return []; // "Full Payment" or "Custom" — no installments
 
   const remaining = totalAmount - advanceAmount;
-  const perInstallment = Math.floor(remaining / count);
   const installments = [];
-  for (let i = 0; i < count; i++) {
+  let allocated = 0;
+  stages.forEach((stage, i) => {
     const dueDate = new Date();
     dueDate.setMonth(dueDate.getMonth() + i + 1);
-    const amount = i === count - 1 ? remaining - perInstallment * (count - 1) : perInstallment;
-    installments.push({ amount, dueDate });
-  }
+    const amount = i === stages.length - 1 ? remaining - allocated : Math.round((remaining * stage.percent) / 100);
+    allocated += amount;
+    installments.push({ milestone: stage.milestone, percent: stage.percent, amount, dueDate });
+  });
   return installments;
 };
 
@@ -63,6 +91,17 @@ const createBooking = asyncHandler(async (req, res) => {
   }
 
   const totalAmount = unit.price; // the unit's own price is the source of truth
+
+  // Minimum booking (advance) amount is set per-project, as a % of the unit price —
+  // not a flat number the agent has to remember or guess.
+  const minBookingPercent = projectDoc.minBookingPercent ?? 10;
+  const minBookingAmount = Math.round((totalAmount * minBookingPercent) / 100);
+  if (Number(advanceAmount) < minBookingAmount) {
+    throw new ApiError(
+      400,
+      `Advance amount must be at least ₹${minBookingAmount.toLocaleString("en-IN")} (${minBookingPercent}% of the unit price)`
+    );
+  }
 
   const booking = await Booking.create({
     agencyId: req.user._id,

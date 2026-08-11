@@ -19,6 +19,10 @@ const projectSchema = new mongoose.Schema(
     availableUnits: { type: Number, default: 0, min: 0 },
     purchasePrice: { type: Number, default: 0, min: 0 },
     basePrice: { type: Number, default: 0, min: 0 }, // default/suggested selling price for new units
+    // Minimum advance (booking amount) as a % of the unit's price — e.g. 10 means a
+    // buyer must pay at least 10% of the unit price to reserve it. Drives both the
+    // auto-filled minimum in the booking form and the backend validation on create.
+    minBookingPercent: { type: Number, default: 10, min: 0, max: 100 },
     units: [unitSchema], // each unit can carry its own price, overriding basePrice
     status: { type: String, enum: ["active", "sold_out", "closed"], default: "active" },
     isDeleted: { type: Boolean, default: false },

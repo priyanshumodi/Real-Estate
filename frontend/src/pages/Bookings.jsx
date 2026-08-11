@@ -47,13 +47,25 @@ const Bookings = () => {
   const availableUnits = selectedProject?.units?.filter((u) => u.status === "Available") || [];
   const selectedUnit = availableUnits.find((u) => u._id === selectedUnitId);
   const totalAmount = selectedUnit?.price || 0;
+  const minBookingPercent = selectedProject?.minBookingPercent ?? 10;
+  const minBookingAmount = totalAmount ? Math.round((totalAmount * minBookingPercent) / 100) : 0;
   const preview = previewInstallments(totalAmount, Number(advanceAmount) || 0, planType);
   // Leads not yet converted to a client — these are eligible to "book straight from a lead"
   const bookableLeads = leadsData?.data?.filter((l) => l.status !== "Converted") || [];
 
+  // Auto-fill the minimum required advance whenever the unit (and therefore the
+  // project's minBookingPercent) changes — still editable, just starts at the floor.
+  useEffect(() => {
+    if (selectedUnit) setAdvanceAmount(minBookingAmount);
+  }, [selectedUnitId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onSubmit = async (formData) => {
     setFormError("");
     if (!selectedUnitId) { setFormError("Pick a unit first."); return; }
+    if (Number(advanceAmount) < minBookingAmount) {
+      setFormError(`Advance amount must be at least ₹${minBookingAmount.toLocaleString()} (${minBookingPercent}% of the unit price).`);
+      return;
+    }
     try {
       await createBooking.mutateAsync({
         project: selectedProjectId,
@@ -163,6 +175,11 @@ const Bookings = () => {
                 value={advanceAmount}
                 onChange={(e) => setAdvanceAmount(e.target.value)}
               />
+              {selectedUnit && (
+                <p className="text-xs text-ink-400 mt-1">
+                  Minimum for this project: ₹{minBookingAmount.toLocaleString()} ({minBookingPercent}% of unit price)
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-ink-900 mb-1.5">Payment plan</label>
@@ -175,10 +192,13 @@ const Bookings = () => {
 
           {preview.length > 0 && (
             <div className="border border-gray-200 rounded-md p-3">
-              <p className="text-xs uppercase tracking-wide text-ink-400 mb-2">Installment plan preview</p>
+              <p className="text-xs uppercase tracking-wide text-ink-400 mb-2">Payment schedule preview</p>
               <ul className="text-sm text-ink-600 space-y-1">
                 {preview.map((p, i) => (
-                  <li key={i}>Installment {i + 1}: ₹{p.amount.toLocaleString()} — due {p.dueDate.toLocaleDateString()}</li>
+                  <li key={i} className="flex justify-between">
+                    <span>{p.milestone} <span className="text-ink-400">({p.percent}%)</span></span>
+                    <span>₹{p.amount.toLocaleString()} — due {p.dueDate.toLocaleDateString()}</span>
+                  </li>
                 ))}
               </ul>
             </div>

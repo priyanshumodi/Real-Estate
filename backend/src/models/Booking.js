@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 
 const installmentSchema = new mongoose.Schema(
   {
+    milestone: { type: String, trim: true, default: null }, // e.g. "On Construction Start" — null for legacy/custom
+    percent: { type: Number, default: null }, // % of the post-advance remaining amount this installment represents
     amount: { type: Number, required: true },
     dueDate: { type: Date, required: true },
     status: { type: String, enum: ["Pending", "Paid", "Overdue"], default: "Pending" },

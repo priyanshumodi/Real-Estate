@@ -29,18 +29,42 @@ export const useCreateBooking = () => {
   });
 };
 
-// Mirrors the backend's installment math exactly, so the UI can preview the plan before submitting
+// Same milestone percentages as the backend's MILESTONE_PLANS in bookingController.js —
+// keep these two in sync if the plan structure ever changes.
+const MILESTONE_PLANS = {
+  "2 Installments": [
+    { milestone: "On Construction Start", percent: 50 },
+    { milestone: "On Possession", percent: 50 },
+  ],
+  "4 Installments": [
+    { milestone: "On Construction Start", percent: 30 },
+    { milestone: "On Slab Completion", percent: 30 },
+    { milestone: "On Finishing Work", percent: 20 },
+    { milestone: "On Possession", percent: 20 },
+  ],
+  "6 Installments": [
+    { milestone: "On Construction Start", percent: 20 },
+    { milestone: "On Plinth Completion", percent: 15 },
+    { milestone: "On Slab Completion (Mid Floor)", percent: 20 },
+    { milestone: "On Slab Completion (Top Floor)", percent: 15 },
+    { milestone: "On Finishing & Fit-out", percent: 15 },
+    { milestone: "On Possession", percent: 15 },
+  ],
+};
+
+// Mirrors the backend's installment math exactly, so the UI can preview the plan before submitting.
+// Milestone percentages, not equal shares — the last stage absorbs the rounding remainder.
 export const previewInstallments = (totalAmount, advanceAmount, planType) => {
-  const countMap = { "Full Payment": 0, "2 Installments": 2, "4 Installments": 4, "6 Installments": 6 };
-  const count = countMap[planType] ?? 0;
-  if (!count || !totalAmount) return [];
+  const stages = MILESTONE_PLANS[planType];
+  if (!stages || !totalAmount) return [];
   const remaining = totalAmount - advanceAmount;
-  const per = Math.floor(remaining / count);
-  return Array.from({ length: count }, (_, i) => {
+  let allocated = 0;
+  return stages.map((stage, i) => {
     const due = new Date();
     due.setMonth(due.getMonth() + i + 1);
-    const amount = i === count - 1 ? remaining - per * (count - 1) : per;
-    return { amount, dueDate: due };
+    const amount = i === stages.length - 1 ? remaining - allocated : Math.round((remaining * stage.percent) / 100);
+    allocated += amount;
+    return { milestone: stage.milestone, percent: stage.percent, amount, dueDate: due };
   });
 };
 

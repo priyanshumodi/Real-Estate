@@ -97,6 +97,11 @@ const Projects = () => {
           <TextField label="Total units" type="number" {...register("totalUnits")} />
           <TextField label="Purchase price (per unit, from developer)" type="number" {...register("purchasePrice")} />
           <TextField label="Selling price (per unit, to customer)" type="number" {...register("basePrice")} />
+          <TextField
+            label="Minimum booking amount (% of unit price, default 10%)"
+            type="number"
+            {...register("minBookingPercent")}
+          />
           <div className="col-span-2">
             <Button type="submit" loading={createProject.isPending} className="!w-auto px-6">
               Save project

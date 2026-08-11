@@ -4,7 +4,7 @@ const Project = require("../models/Project");
 
 // Agency only. Agents never create/edit projects.
 const createProject = asyncHandler(async (req, res) => {
-  const { name, developer, location, description, totalUnits, basePrice, purchasePrice } = req.body;
+  const { name, developer, location, description, totalUnits, basePrice, purchasePrice, minBookingPercent } = req.body;
   if (!name) throw new ApiError(400, "Project name is required");
   if (!developer) throw new ApiError(400, "Developer is required — pick an existing one or add a new one");
 
@@ -26,6 +26,7 @@ const createProject = asyncHandler(async (req, res) => {
     availableUnits: count,
     basePrice: price,
     purchasePrice: purchasePrice || 0,
+    minBookingPercent: minBookingPercent !== undefined && minBookingPercent !== "" ? Number(minBookingPercent) : 10,
     units,
   });
 
