@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
+import SearchableSelect from "../components/ui/SearchableSelect";
 import { useProjects, useCreateProject } from "../api/projects";
 import { useDevelopers, useCreateDeveloper } from "../api/developers";
 import { useAuth } from "../context/AuthContext";
@@ -13,6 +14,7 @@ const Projects = () => {
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [showNewDeveloper, setShowNewDeveloper] = useState(false);
+  const [developerId, setDeveloperId] = useState("");
   const [newDevName, setNewDevName] = useState("");
   const [newDevPhone, setNewDevPhone] = useState("");
 
@@ -23,16 +25,21 @@ const Projects = () => {
   const createDeveloper = useCreateDeveloper();
   const { register, handleSubmit, reset, setValue } = useForm();
 
+  const developerOptions = developers?.map((d) => ({ value: d._id, label: d.name })) || [];
+
   const onSubmit = async (formData) => {
-    await createProject.mutateAsync(formData);
+    await createProject.mutateAsync({ ...formData, developer: developerId });
     reset();
+    setDeveloperId("");
     setShowForm(false);
   };
 
   const handleAddDeveloper = async () => {
     if (!newDevName) return;
     const res = await createDeveloper.mutateAsync({ name: newDevName, phone: newDevPhone });
-    setValue("developer", res.data._id);
+    const newId = res.data._id;
+    setValue("developer", newId);
+    setDeveloperId(newId);
     setShowNewDeveloper(false);
     setNewDevName("");
     setNewDevPhone("");
@@ -59,16 +66,23 @@ const Projects = () => {
           <div>
             <label className="block text-sm font-medium text-ink-900 mb-1.5">Developer</label>
             {!showNewDeveloper ? (
-              <div className="flex gap-2">
-                <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("developer", { required: true })}>
-                  <option value="">Select developer</option>
-                  {developers?.map((d) => (
-                    <option key={d._id} value={d._id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" onClick={() => setShowNewDeveloper(true)} className="text-xs text-navy-900 whitespace-nowrap font-medium hover:text-gold-600">
+              <div className="flex gap-2 items-center">
+                <div className="flex-1">
+                  <SearchableSelect
+                    options={developerOptions}
+                    value={developerId}
+                    onChange={(val) => {
+                      setDeveloperId(val);
+                      setValue("developer", val);
+                    }}
+                    placeholder="Select developer"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowNewDeveloper(true)}
+                  className="text-xs text-navy-900 whitespace-nowrap font-medium hover:text-gold-600 px-1"
+                >
                   + New
                 </button>
               </div>
@@ -86,7 +100,11 @@ const Projects = () => {
                   value={newDevPhone}
                   onChange={(e) => setNewDevPhone(e.target.value)}
                 />
-                <button type="button" onClick={handleAddDeveloper} className="text-xs bg-navy-900 text-white rounded-md px-3 whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={handleAddDeveloper}
+                  className="text-xs bg-navy-900 text-white rounded-md px-3 whitespace-nowrap"
+                >
                   Save
                 </button>
               </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
+import SearchableSelect from "../components/ui/SearchableSelect";
 import { useLeads, useCreateLead, useAgents, useBulkImportLeads, useBulkAssignLeads } from "../api/leads";
 import { useProjects } from "../api/projects";
 import Papa from "papaparse";
@@ -21,7 +22,7 @@ const priorityColor = {
   Cold: "bg-blue-50 text-blue-600",
 };
 
-// Small line-icon per communication channel — reused inside the response badge below.
+// Line icon per communication channel
 const METHOD_ICON_PATH = {
   Phone: <path d="M6.62 10.79a15.1 15.1 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01z" />,
   WhatsApp: <path d="M12 3a9 9 0 0 0-7.75 13.5L3 21l4.5-1.25A9 9 0 1 0 12 3z" />,
@@ -55,9 +56,6 @@ const responseStyle = {
   Neutral: "bg-gray-100 text-gray-500",
 };
 
-// Shows which channel a contact happened on, tinted by how it went — replaces the old
-// generic checkmark/cross so the "Last 5" strip reads like "Phone: positive, Email: negative"
-// at a glance instead of just a row of ticks and crosses.
 const ResponseBadge = ({ method, response }) => (
   <span
     title={`${method || "Unknown"} · ${response}`}
@@ -74,6 +72,8 @@ const Leads = () => {
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ status: "", priority: "", search: "" });
   const [showForm, setShowForm] = useState(false);
+  const [createProjectId, setCreateProjectId] = useState("");
+  const [createAgentId, setCreateAgentId] = useState("");
 
   const [page, setPage] = useState(1);
   const { data, isLoading } = useLeads({ ...filters, page, limit: 20 });
@@ -91,6 +91,11 @@ const Leads = () => {
   const [bulkAgent, setBulkAgent] = useState("");
   const [bulkProject, setBulkProject] = useState("");
   const [bulkError, setBulkError] = useState("");
+  const [createError, setCreateError] = useState("");
+
+  // Searchable options maps
+  const projectOptions = projectsData?.data?.map((p) => ({ value: p._id, label: p.name })) || [];
+  const agentOptions = agents?.map((a) => ({ value: a._id, label: a.name })) || [];
 
   const toggleSelect = (id) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -131,19 +136,19 @@ const Leads = () => {
     }
   };
 
-  const [createError, setCreateError] = useState("");
-
   const onSubmit = async (formData) => {
     setCreateError("");
     try {
       await createLead.mutateAsync({
-        project: formData.project,
+        project: createProjectId,
         customer: { name: formData.name, phone: formData.phone, email: formData.email },
         source: formData.source,
         priority: formData.priority,
-        assignedAgent: formData.assignedAgent || undefined,
+        assignedAgent: createAgentId || undefined,
       });
       reset();
+      setCreateProjectId("");
+      setCreateAgentId("");
       setShowForm(false);
     } catch (err) {
       setCreateError(err?.response?.data?.message || "Could not create the lead.");
@@ -174,16 +179,14 @@ const Leads = () => {
           <p className="text-xs uppercase tracking-wide text-ink-400 mb-3">
             CSV columns expected: <code>name, phone, email, source, priority</code>
           </p>
-          <select
-            className="rounded-md border border-gray-300 px-3.5 py-2.5 text-sm mb-3"
-            value={importProject}
-            onChange={(e) => setImportProject(e.target.value)}
-          >
-            <option value="">Select project for this batch</option>
-            {projectsData?.data?.map((p) => (
-              <option key={p._id} value={p._id}>{p.name}</option>
-            ))}
-          </select>
+          <div className="mb-3 max-w-sm">
+            <SearchableSelect
+              options={projectOptions}
+              value={importProject}
+              onChange={setImportProject}
+              placeholder="Select project for this batch"
+            />
+          </div>
           <input
             type="file"
             accept=".csv"
@@ -206,12 +209,12 @@ const Leads = () => {
         >
           <div>
             <label className="block text-sm font-medium text-ink-900 mb-1.5">Project</label>
-            <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("project", { required: true })}>
-              <option value="">Select project</option>
-              {projectsData?.data?.map((p) => (
-                <option key={p._id} value={p._id}>{p.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={projectOptions}
+              value={createProjectId}
+              onChange={setCreateProjectId}
+              placeholder="Select project"
+            />
           </div>
           <TextField label="Customer name" {...register("name", { required: true })} />
           <TextField label="Phone" {...register("phone", { required: true })} />
@@ -232,12 +235,12 @@ const Leads = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-ink-900 mb-1.5">Assign agent (optional)</label>
-            <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("assignedAgent")}>
-              <option value="">Unassigned</option>
-              {agents?.map((a) => (
-                <option key={a._id} value={a._id}>{a.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={agentOptions}
+              value={createAgentId}
+              onChange={setCreateAgentId}
+              placeholder="Unassigned"
+            />
           </div>
           <div className="col-span-2">
             {createError && <p className="text-sm text-red-500 mb-2">{createError}</p>}
@@ -276,22 +279,22 @@ const Leads = () => {
           <div className="flex items-center justify-between">
             <p className="text-sm">{selectedIds.length} lead(s) selected</p>
             <div className="flex gap-2 items-center">
-              <select
-                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
-                value={bulkProject}
-                onChange={(e) => setBulkProject(e.target.value)}
-              >
-                <option value="">Keep current project...</option>
-                {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
-              </select>
-              <select
-                className="rounded-md px-3 py-1.5 text-sm text-ink-900 bg-white border border-white/20"
-                value={bulkAgent}
-                onChange={(e) => setBulkAgent(e.target.value)}
-              >
-                <option value="">Keep current agent...</option>
-                {agents?.map((a) => <option key={a._id} value={a._id}>{a.name}</option>)}
-              </select>
+              <div className="w-52">
+                <SearchableSelect
+                  options={projectOptions}
+                  value={bulkProject}
+                  onChange={setBulkProject}
+                  placeholder="Keep current project..."
+                />
+              </div>
+              <div className="w-52">
+                <SearchableSelect
+                  options={agentOptions}
+                  value={bulkAgent}
+                  onChange={setBulkAgent}
+                  placeholder="Keep current agent..."
+                />
+              </div>
               <Button className="!w-auto px-4" loading={bulkAssign.isPending} onClick={handleBulkAssign}>
                 Apply
               </Button>

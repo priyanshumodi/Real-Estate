@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useSearchParams } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
+import SearchableSelect from "../components/ui/SearchableSelect";
 import { useBookings, useCreateBooking, previewInstallments } from "../api/bookings";
 import { useProjects, useProject } from "../api/projects";
 import { useClients } from "../api/clients";
@@ -26,6 +27,8 @@ const Bookings = () => {
   const [bookFor, setBookFor] = useState("client"); // "client" | "lead"
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedUnitId, setSelectedUnitId] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedLeadId, setSelectedLeadId] = useState("");
   const [advanceAmount, setAdvanceAmount] = useState(0);
   const [planType, setPlanType] = useState("Full Payment");
   const [formError, setFormError] = useState("");
@@ -37,10 +40,13 @@ const Bookings = () => {
   const { data: clientsData } = useClients({ limit: 1000 });
   const { data: leadsData } = useLeads({ status: "", limit: 1000 });
   const createBooking = useCreateBooking();
-  const { register, handleSubmit, reset, setValue } = useForm();
+  const { handleSubmit, reset, setValue } = useForm();
 
   useEffect(() => {
-    if (preselectedClient) setValue("client", preselectedClient);
+    if (preselectedClient) {
+      setValue("client", preselectedClient);
+      setSelectedClientId(preselectedClient);
+    }
   }, [preselectedClient, setValue]);
 
   const preselectedClientObj = clientsData?.data?.find((c) => c._id === preselectedClient);
@@ -50,33 +56,67 @@ const Bookings = () => {
   const minBookingPercent = selectedProject?.minBookingPercent ?? 10;
   const minBookingAmount = totalAmount ? Math.round((totalAmount * minBookingPercent) / 100) : 0;
   const preview = previewInstallments(totalAmount, Number(advanceAmount) || 0, planType);
-  // Leads not yet converted to a client — these are eligible to "book straight from a lead"
+  
+  // Leads not yet converted to a client
   const bookableLeads = leadsData?.data?.filter((l) => l.status !== "Converted") || [];
 
-  // Auto-fill the minimum required advance whenever the unit (and therefore the
-  // project's minBookingPercent) changes — still editable, just starts at the floor.
+  // Options maps for SearchableSelect
+  const projectOptions = projectsData?.data?.map((p) => ({ value: p._id, label: p.name })) || [];
+  const unitOptions = availableUnits.map((u) => ({
+    value: u._id,
+    label: `${u.unitNumber} — ₹${u.price.toLocaleString()}`,
+  }));
+  const clientOptions = clientsData?.data?.map((c) => ({
+    value: c._id,
+    label: `${c.name} · ${c.phone}`,
+  })) || [];
+  const leadOptions = bookableLeads.map((l) => ({
+    value: l._id,
+    label: `${l.customer.name} · ${l.customer.phone} (${l.status})`,
+  }));
+
+  // Auto-fill minimum required advance whenever the unit changes
   useEffect(() => {
     if (selectedUnit) setAdvanceAmount(minBookingAmount);
   }, [selectedUnitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSubmit = async (formData) => {
+  const onSubmit = async () => {
     setFormError("");
-    if (!selectedUnitId) { setFormError("Pick a unit first."); return; }
-    if (Number(advanceAmount) < minBookingAmount) {
-      setFormError(`Advance amount must be at least ₹${minBookingAmount.toLocaleString()} (${minBookingPercent}% of the unit price).`);
+    if (!selectedUnitId) {
+      setFormError("Pick a unit first.");
       return;
     }
+    if (bookFor === "client" && !selectedClientId) {
+      setFormError("Select a client.");
+      return;
+    }
+    if (bookFor === "lead" && !selectedLeadId) {
+      setFormError("Select a lead.");
+      return;
+    }
+    if (Number(advanceAmount) < minBookingAmount) {
+      setFormError(
+        `Advance amount must be at least ₹${minBookingAmount.toLocaleString()} (${minBookingPercent}% of the unit price).`
+      );
+      return;
+    }
+
     try {
       await createBooking.mutateAsync({
         project: selectedProjectId,
         unitId: selectedUnitId,
-        client: bookFor === "client" ? (preselectedClient || formData.client) : undefined,
-        lead: bookFor === "lead" ? formData.lead : undefined,
+        client: bookFor === "client" ? selectedClientId : undefined,
+        lead: bookFor === "lead" ? selectedLeadId : undefined,
         advanceAmount: Number(advanceAmount) || 0,
         planType,
       });
       reset();
-      setSelectedProjectId(""); setSelectedUnitId(""); setAdvanceAmount(0); setPlanType("Full Payment");
+      setSelectedProjectId("");
+      setSelectedUnitId("");
+      setSelectedClientId("");
+      setSelectedLeadId("");
+      setAdvanceAmount(0);
+      setPlanType("Full Payment");
       setShowForm(false);
     } catch (err) {
       setFormError(err?.response?.data?.message || "Failed to create booking.");
@@ -100,29 +140,26 @@ const Bookings = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-ink-900 mb-1.5">Project</label>
-              <select
-                className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm"
+              <SearchableSelect
+                options={projectOptions}
                 value={selectedProjectId}
-                onChange={(e) => { setSelectedProjectId(e.target.value); setSelectedUnitId(""); }}
-              >
-                <option value="">Select project</option>
-                {projectsData?.data?.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
-              </select>
+                onChange={(val) => {
+                  setSelectedProjectId(val);
+                  setSelectedUnitId("");
+                }}
+                placeholder="Select project"
+              />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-ink-900 mb-1.5">Unit (price is per-unit)</label>
-              <select
-                className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm"
+              <SearchableSelect
+                options={unitOptions}
                 value={selectedUnitId}
-                onChange={(e) => setSelectedUnitId(e.target.value)}
+                onChange={setSelectedUnitId}
+                placeholder={selectedProjectId ? "Select unit" : "Pick a project first"}
                 disabled={!selectedProjectId}
-              >
-                <option value="">{selectedProjectId ? "Select unit" : "Pick a project first"}</option>
-                {availableUnits.map((u) => (
-                  <option key={u._id} value={u._id}>{u.unitNumber} — ₹{u.price.toLocaleString()}</option>
-                ))}
-              </select>
+              />
               {selectedProjectId && availableUnits.length === 0 && (
                 <p className="text-xs text-red-500 mt-1">No available units left in this project.</p>
               )}
@@ -139,11 +176,21 @@ const Bookings = () => {
             <label className="block text-sm font-medium text-ink-900 mb-1.5">Book for</label>
             <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-1.5">
-                <input type="radio" checked={bookFor === "client"} onChange={() => setBookFor("client")} disabled={!!preselectedClient} />
+                <input
+                  type="radio"
+                  checked={bookFor === "client"}
+                  onChange={() => setBookFor("client")}
+                  disabled={!!preselectedClient}
+                />
                 Existing client
               </label>
               <label className="flex items-center gap-1.5">
-                <input type="radio" checked={bookFor === "lead"} onChange={() => setBookFor("lead")} disabled={!!preselectedClient} />
+                <input
+                  type="radio"
+                  checked={bookFor === "lead"}
+                  onChange={() => setBookFor("lead")}
+                  disabled={!!preselectedClient}
+                />
                 A lead (auto-converts to client)
               </label>
             </div>
@@ -151,19 +198,36 @@ const Bookings = () => {
 
           {bookFor === "client" ? (
             preselectedClientObj ? (
-              <input disabled value={`${preselectedClientObj.name} · ${preselectedClientObj.phone}`}
-                className="w-full rounded-md border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-ink-600" />
+              <input
+                disabled
+                value={`${preselectedClientObj.name} · ${preselectedClientObj.phone}`}
+                className="w-full rounded-md border border-gray-300 bg-gray-50 px-3.5 py-2.5 text-sm text-ink-600"
+              />
             ) : (
-              <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("client", { required: bookFor === "client" })}>
-                <option value="">Select client</option>
-                {clientsData?.data?.map((c) => <option key={c._id} value={c._id}>{c.name} · {c.phone}</option>)}
-              </select>
+              <div>
+                <SearchableSelect
+                  options={clientOptions}
+                  value={selectedClientId}
+                  onChange={(val) => {
+                    setSelectedClientId(val);
+                    setValue("client", val);
+                  }}
+                  placeholder="Select client"
+                />
+              </div>
             )
           ) : (
-            <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" {...register("lead", { required: bookFor === "lead" })}>
-              <option value="">Select lead</option>
-              {bookableLeads.map((l) => <option key={l._id} value={l._id}>{l.customer.name} · {l.customer.phone} ({l.status})</option>)}
-            </select>
+            <div>
+              <SearchableSelect
+                options={leadOptions}
+                value={selectedLeadId}
+                onChange={(val) => {
+                  setSelectedLeadId(val);
+                  setValue("lead", val);
+                }}
+                placeholder="Select lead"
+              />
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
@@ -183,9 +247,15 @@ const Bookings = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-ink-900 mb-1.5">Payment plan</label>
-              <select className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm" value={planType} onChange={(e) => setPlanType(e.target.value)}>
-                <option>Full Payment</option><option>2 Installments</option>
-                <option>4 Installments</option><option>6 Installments</option>
+              <select
+                className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm"
+                value={planType}
+                onChange={(e) => setPlanType(e.target.value)}
+              >
+                <option>Full Payment</option>
+                <option>2 Installments</option>
+                <option>4 Installments</option>
+                <option>6 Installments</option>
               </select>
             </div>
           </div>
@@ -196,7 +266,9 @@ const Bookings = () => {
               <ul className="text-sm text-ink-600 space-y-1">
                 {preview.map((p, i) => (
                   <li key={i} className="flex justify-between">
-                    <span>{p.milestone} <span className="text-ink-400">({p.percent}%)</span></span>
+                    <span>
+                      {p.milestone} <span className="text-ink-400">({p.percent}%)</span>
+                    </span>
                     <span>₹{p.amount.toLocaleString()} — due {p.dueDate.toLocaleDateString()}</span>
                   </li>
                 ))}
@@ -206,7 +278,9 @@ const Bookings = () => {
 
           {formError && <p className="text-sm text-red-500">{formError}</p>}
 
-          <Button type="submit" loading={createBooking.isPending} className="!w-auto px-6">Reserve unit</Button>
+          <Button type="submit" loading={createBooking.isPending} className="!w-auto px-6">
+            Reserve unit
+          </Button>
         </form>
       )}
 
@@ -221,9 +295,19 @@ const Bookings = () => {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={4} className="px-5 py-6 text-center text-ink-400">Loading...</td></tr>}
+            {isLoading && (
+              <tr>
+                <td colSpan={4} className="px-5 py-6 text-center text-ink-400">
+                  Loading...
+                </td>
+              </tr>
+            )}
             {!isLoading && data?.data?.length === 0 && (
-              <tr><td colSpan={4} className="px-5 py-6 text-center text-ink-400">No bookings yet.</td></tr>
+              <tr>
+                <td colSpan={4} className="px-5 py-6 text-center text-ink-400">
+                  No bookings yet.
+                </td>
+              </tr>
             )}
             {data?.data?.map((b) => (
               <tr key={b._id} className="border-t border-gray-100 hover:bg-gray-50">
@@ -232,10 +316,16 @@ const Bookings = () => {
                     {b.client?.name}
                   </Link>
                 </td>
-                <td className="px-5 py-3 text-ink-600">{b.project?.name} · Unit {b.unitNumber}</td>
+                <td className="px-5 py-3 text-ink-600">
+                  {b.project?.name} · Unit {b.unitNumber}
+                </td>
                 <td className="px-5 py-3 text-ink-600">₹{b.totalAmount.toLocaleString()}</td>
                 <td className="px-5 py-3">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[b.status] || "bg-gray-100 text-gray-600"}`}>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      statusColor[b.status] || "bg-gray-100 text-gray-600"
+                    }`}
+                  >
                     {b.status}
                   </span>
                 </td>
