@@ -1,10 +1,11 @@
 const asyncHandler = require("../utils/asyncHandler");
 const { ApiError, success } = require("../utils/apiResponse");
 const Project = require("../models/Project");
+const { DEFAULT_PAYMENT_PLANS, validatePaymentPlans } = require("../utils/paymentPlans");
 
 // Agency only. Agents never create/edit projects.
 const createProject = asyncHandler(async (req, res) => {
-  const { name, developer, location, description, totalUnits, basePrice, purchasePrice, minBookingPercent } = req.body;
+  const { name, developer, location, description, totalUnits, basePrice, purchasePrice, minBookingPercent, paymentPlans } = req.body;
   if (!name) throw new ApiError(400, "Project name is required");
   if (!developer) throw new ApiError(400, "Developer is required — pick an existing one or add a new one");
 
@@ -15,6 +16,10 @@ const createProject = asyncHandler(async (req, res) => {
     price,
     status: "Available",
   }));
+
+  // Seed with editable starting-point templates unless the agency already sent their
+  // own plans — new projects shouldn't start with an empty payment-plan builder.
+  const plans = paymentPlans?.length ? validatePaymentPlans(paymentPlans) : DEFAULT_PAYMENT_PLANS;
 
   const project = await Project.create({
     agencyId: req.user._id,
@@ -27,6 +32,7 @@ const createProject = asyncHandler(async (req, res) => {
     basePrice: price,
     purchasePrice: purchasePrice || 0,
     minBookingPercent: minBookingPercent !== undefined && minBookingPercent !== "" ? Number(minBookingPercent) : 10,
+    paymentPlans: plans,
     units,
   });
 
@@ -76,6 +82,8 @@ const getProject = asyncHandler(async (req, res) => {
 });
 
 const updateProject = asyncHandler(async (req, res) => {
+  if (req.body.paymentPlans) validatePaymentPlans(req.body.paymentPlans);
+
   const project = await Project.findOneAndUpdate(
     { _id: req.params.id, agencyId: req.user._id, isDeleted: false },
     req.body,

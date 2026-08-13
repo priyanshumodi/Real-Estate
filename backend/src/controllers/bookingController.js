@@ -5,49 +5,28 @@ const Project = require("../models/Project");
 const Client = require("../models/Client");
 const Lead = require("../models/Lead");
 const notify = require("../utils/notify");
+const { resolvePlans } = require("../utils/paymentPlans");
 
 const scopedAgencyId = (user) => (user.role === "agency" ? user._id : user.agencyId);
 
-// Construction-linked-plan style milestones — percentages of the REMAINING amount
-// (total minus advance), not equal shares. Mirrors how real developer payment
-// schedules are structured: bigger chunks tied to construction start/slab work,
-// smaller ones toward the end. Kept in sync with the frontend's `previewInstallments`
-// in `api/bookings.js` — if you change these percentages, update that copy too.
-const MILESTONE_PLANS = {
-  "2 Installments": [
-    { milestone: "On Construction Start", percent: 50 },
-    { milestone: "On Possession", percent: 50 },
-  ],
-  "4 Installments": [
-    { milestone: "On Construction Start", percent: 30 },
-    { milestone: "On Slab Completion", percent: 30 },
-    { milestone: "On Finishing Work", percent: 20 },
-    { milestone: "On Possession", percent: 20 },
-  ],
-  "6 Installments": [
-    { milestone: "On Construction Start", percent: 20 },
-    { milestone: "On Plinth Completion", percent: 15 },
-    { milestone: "On Slab Completion (Mid Floor)", percent: 20 },
-    { milestone: "On Slab Completion (Top Floor)", percent: 15 },
-    { milestone: "On Finishing & Fit-out", percent: 15 },
-    { milestone: "On Possession", percent: 15 },
-  ],
-};
+// Splits (totalAmount - advanceAmount) across the chosen plan's milestones by their
+// fixed percentages — NOT equal shares. The last milestone absorbs the rounding
+// remainder so the installments always sum exactly to the remaining amount. `project`
+// resolves which plan is actually available (its own paymentPlans, or the global
+// defaults as a fallback) — see utils/paymentPlans.js.
+const buildInstallments = (totalAmount, advanceAmount, planType, project) => {
+  if (planType === "Full Payment") return [];
 
-// Splits (totalAmount - advanceAmount) across the plan's milestones by their fixed
-// percentages — NOT equal shares. The last milestone absorbs the rounding remainder
-// so the installments always sum exactly to the remaining amount.
-const buildInstallments = (totalAmount, advanceAmount, planType) => {
-  const stages = MILESTONE_PLANS[planType];
-  if (!stages) return []; // "Full Payment" or "Custom" — no installments
+  const plan = resolvePlans(project).find((p) => p.name === planType);
+  if (!plan) throw new ApiError(400, `"${planType}" isn't a payment plan on this project.`);
 
   const remaining = totalAmount - advanceAmount;
   const installments = [];
   let allocated = 0;
-  stages.forEach((stage, i) => {
+  plan.stages.forEach((stage, i) => {
     const dueDate = new Date();
     dueDate.setMonth(dueDate.getMonth() + i + 1);
-    const amount = i === stages.length - 1 ? remaining - allocated : Math.round((remaining * stage.percent) / 100);
+    const amount = i === plan.stages.length - 1 ? remaining - allocated : Math.round((remaining * stage.percent) / 100);
     allocated += amount;
     installments.push({ milestone: stage.milestone, percent: stage.percent, amount, dueDate });
   });
@@ -113,7 +92,7 @@ const createBooking = asyncHandler(async (req, res) => {
     totalAmount,
     advanceAmount,
     planType,
-    installments: buildInstallments(totalAmount, advanceAmount, planType),
+    installments: buildInstallments(totalAmount, advanceAmount, planType, projectDoc),
     createdBy: req.user._id,
   });
 

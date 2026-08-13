@@ -10,6 +10,178 @@ import Button from "../components/ui/Button";
 import TextField from "../components/ui/TextField";
 import Pagination from "../components/ui/Pagination";
 
+// Mirrors backend/src/utils/paymentPlans.js's DEFAULT_PAYMENT_PLANS — seeded into
+// the form as editable starting points, same as what the backend would seed anyway
+// if no plans were sent. Keep these two in sync if the defaults ever change.
+const STARTER_PLANS = [
+  {
+    name: "2 Installments",
+    isDefault: false,
+    stages: [
+      { milestone: "On Construction Start", percent: 50 },
+      { milestone: "On Possession", percent: 50 },
+    ],
+  },
+  {
+    name: "4 Installments",
+    isDefault: true,
+    stages: [
+      { milestone: "On Construction Start", percent: 30 },
+      { milestone: "On Slab Completion", percent: 30 },
+      { milestone: "On Finishing Work", percent: 20 },
+      { milestone: "On Possession", percent: 20 },
+    ],
+  },
+  {
+    name: "6 Installments",
+    isDefault: false,
+    stages: [
+      { milestone: "On Construction Start", percent: 20 },
+      { milestone: "On Plinth Completion", percent: 15 },
+      { milestone: "On Slab Completion (Mid Floor)", percent: 20 },
+      { milestone: "On Slab Completion (Top Floor)", percent: 15 },
+      { milestone: "On Finishing & Fit-out", percent: 15 },
+      { milestone: "On Possession", percent: 15 },
+    ],
+  },
+];
+
+// Repeatable plan/stage editor — plain local state (not react-hook-form) since it's
+// a dynamic nested array of arrays. Each plan's stages must sum to 100% (of the
+// post-advance remaining amount, same rule as the backend's validatePaymentPlans).
+const PaymentPlanBuilder = ({ plans, setPlans }) => {
+  const updatePlan = (i, patch) =>
+    setPlans(plans.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+
+  const updateStage = (i, si, patch) =>
+    updatePlan(i, {
+      stages: plans[i].stages.map((s, sidx) => (sidx === si ? { ...s, ...patch } : s)),
+    });
+
+  const addStage = (i) =>
+    updatePlan(i, {
+      stages: [...plans[i].stages, { milestone: "", percent: 0 }],
+    });
+
+  const removeStage = (i, si) =>
+    updatePlan(i, {
+      stages: plans[i].stages.filter((_, sidx) => sidx !== si),
+    });
+
+  const addPlan = () =>
+    setPlans([
+      ...plans,
+      {
+        name: `Plan ${plans.length + 1}`,
+        isDefault: plans.length === 0,
+        stages: [{ milestone: "", percent: 100 }],
+      },
+    ]);
+
+  const removePlan = (i) => setPlans(plans.filter((_, idx) => idx !== i));
+  const setDefault = (i) => setPlans(plans.map((p, idx) => ({ ...p, isDefault: idx === i })));
+
+  return (
+    <div className="col-span-2 border-t border-gray-100 pt-4 mt-1">
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-sm font-medium text-ink-900">
+          Payment plans{" "}
+          <span className="text-ink-400 font-normal">
+            (post-advance milestones — each plan must total 100%)
+          </span>
+        </label>
+        <button
+          type="button"
+          onClick={addPlan}
+          className="text-xs text-navy-900 font-medium hover:text-gold-600"
+        >
+          + Add plan
+        </button>
+      </div>
+      <div className="space-y-3">
+        {plans.map((plan, i) => {
+          const total = plan.stages.reduce(
+            (s, st) => s + (Number(st.percent) || 0),
+            0
+          );
+          return (
+            <div key={i} className="border border-gray-200 rounded-md p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm font-medium"
+                  value={plan.name}
+                  onChange={(e) => updatePlan(i, { name: e.target.value })}
+                />
+                <label className="flex items-center gap-1 text-xs text-ink-600 whitespace-nowrap">
+                  <input
+                    type="radio"
+                    name="defaultPlan"
+                    checked={plan.isDefault}
+                    onChange={() => setDefault(i)}
+                  />{" "}
+                  Default
+                </label>
+                <button
+                  type="button"
+                  onClick={() => removePlan(i)}
+                  className="text-xs text-red-500 hover:text-red-600"
+                >
+                  Remove
+                </button>
+              </div>
+              {plan.stages.map((s, si) => (
+                <div key={si} className="flex items-center gap-2 mb-1.5">
+                  <input
+                    placeholder="Milestone (e.g. On Slab Completion)"
+                    className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs"
+                    value={s.milestone}
+                    onChange={(e) =>
+                      updateStage(i, si, { milestone: e.target.value })
+                    }
+                  />
+                  <input
+                    type="number"
+                    className="w-20 rounded-md border border-gray-300 px-2 py-1.5 text-xs"
+                    value={s.percent}
+                    onChange={(e) =>
+                      updateStage(i, si, { percent: e.target.value })
+                    }
+                  />
+                  <span className="text-xs text-ink-400">%</span>
+                  <button
+                    type="button"
+                    onClick={() => removeStage(i, si)}
+                    className="text-xs text-ink-400 hover:text-red-500"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between mt-1">
+                <button
+                  type="button"
+                  onClick={() => addStage(i)}
+                  className="text-xs text-navy-900 hover:text-gold-600"
+                >
+                  + Add stage
+                </button>
+                <span
+                  className={`text-xs font-medium ${
+                    total === 100 ? "text-green-600" : "text-red-500"
+                  }`}
+                >
+                  {total}% of remaining
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+
 const Projects = () => {
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
@@ -17,6 +189,11 @@ const Projects = () => {
   const [developerId, setDeveloperId] = useState("");
   const [newDevName, setNewDevName] = useState("");
   const [newDevPhone, setNewDevPhone] = useState("");
+
+  const [plans, setPlans] = useState(() =>
+    JSON.parse(JSON.stringify(STARTER_PLANS))
+  );
+  const [planError, setPlanError] = useState("");
 
   const [page, setPage] = useState(1);
   const { data, isLoading } = useProjects({ page, limit: 20 });
@@ -27,8 +204,29 @@ const Projects = () => {
 
   const developerOptions = developers?.map((d) => ({ value: d._id, label: d.name })) || [];
 
+  const openForm = () => {
+    setPlans(JSON.parse(JSON.stringify(STARTER_PLANS)));
+    setPlanError("");
+    setShowForm(true);
+  };
+
   const onSubmit = async (formData) => {
-    await createProject.mutateAsync({ ...formData, developer: developerId });
+    setPlanError("");
+    const bad = plans.find(
+      (p) =>
+        p.stages.reduce((s, st) => s + (Number(st.percent) || 0), 0) !== 100
+    );
+
+    if (bad) {
+      setPlanError(`Plan "${bad.name}"'s stages must sum to exactly 100%.`);
+      return;
+    }
+
+    await createProject.mutateAsync({
+      ...formData,
+      developer: developerId,
+      paymentPlans: plans,
+    });
     reset();
     setDeveloperId("");
     setShowForm(false);
@@ -53,7 +251,10 @@ const Projects = () => {
           <h1 className="font-display text-2xl text-ink-900">Projects</h1>
         </div>
         {user?.role === "agency" && (
-          <Button className="!w-auto px-4" onClick={() => setShowForm((s) => !s)}>
+          <Button
+            className="!w-auto px-4"
+            onClick={() => (showForm ? setShowForm(false) : openForm())}
+          >
             {showForm ? "Cancel" : "+ New project"}
           </Button>
         )}
@@ -120,7 +321,13 @@ const Projects = () => {
             type="number"
             {...register("minBookingPercent")}
           />
+
+          <PaymentPlanBuilder plans={plans} setPlans={setPlans} />
+
           <div className="col-span-2">
+            {planError && (
+              <p className="text-sm text-red-500 mb-2">{planError}</p>
+            )}
             <Button type="submit" loading={createProject.isPending} className="!w-auto px-6">
               Save project
             </Button>

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { Link, useSearchParams } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import SearchableSelect from "../components/ui/SearchableSelect";
-import { useBookings, useCreateBooking, previewInstallments } from "../api/bookings";
+import { useBookings, useCreateBooking, previewInstallments, resolveProjectPlans } from "../api/bookings";
 import { useProjects, useProject } from "../api/projects";
 import { useClients } from "../api/clients";
 import { useLeads } from "../api/leads";
@@ -55,7 +55,8 @@ const Bookings = () => {
   const totalAmount = selectedUnit?.price || 0;
   const minBookingPercent = selectedProject?.minBookingPercent ?? 10;
   const minBookingAmount = totalAmount ? Math.round((totalAmount * minBookingPercent) / 100) : 0;
-  const preview = previewInstallments(totalAmount, Number(advanceAmount) || 0, planType);
+  const preview = previewInstallments(totalAmount, Number(advanceAmount) || 0, planType, selectedProject);
+  const projectPlans = resolveProjectPlans(selectedProject);
   
   // Leads not yet converted to a client
   const bookableLeads = leadsData?.data?.filter((l) => l.status !== "Converted") || [];
@@ -80,18 +81,10 @@ const Bookings = () => {
     if (selectedUnit) setAdvanceAmount(minBookingAmount);
   }, [selectedUnitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSubmit = async () => {
+  const onSubmit = async (formData) => {
     setFormError("");
     if (!selectedUnitId) {
       setFormError("Pick a unit first.");
-      return;
-    }
-    if (bookFor === "client" && !selectedClientId) {
-      setFormError("Select a client.");
-      return;
-    }
-    if (bookFor === "lead" && !selectedLeadId) {
-      setFormError("Select a lead.");
       return;
     }
     if (Number(advanceAmount) < minBookingAmount) {
@@ -105,8 +98,8 @@ const Bookings = () => {
       await createBooking.mutateAsync({
         project: selectedProjectId,
         unitId: selectedUnitId,
-        client: bookFor === "client" ? selectedClientId : undefined,
-        lead: bookFor === "lead" ? selectedLeadId : undefined,
+        client: bookFor === "client" ? (preselectedClient || formData.client) : undefined,
+        lead: bookFor === "lead" ? formData.lead : undefined,
         advanceAmount: Number(advanceAmount) || 0,
         planType,
       });
@@ -146,6 +139,7 @@ const Bookings = () => {
                 onChange={(val) => {
                   setSelectedProjectId(val);
                   setSelectedUnitId("");
+                  setPlanType("Full Payment");
                 }}
                 placeholder="Select project"
               />
@@ -253,9 +247,9 @@ const Bookings = () => {
                 onChange={(e) => setPlanType(e.target.value)}
               >
                 <option>Full Payment</option>
-                <option>2 Installments</option>
-                <option>4 Installments</option>
-                <option>6 Installments</option>
+                {projectPlans.map((p) => (
+                  <option key={p.name}>{p.name}</option>
+                ))}
               </select>
             </div>
           </div>

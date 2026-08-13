@@ -6,6 +6,20 @@ const unitSchema = new mongoose.Schema({
   status: { type: String, enum: ["Available", "Reserved", "Sold"], default: "Available" },
 });
 
+const planStageSchema = new mongoose.Schema(
+  { milestone: { type: String, required: true, trim: true }, percent: { type: Number, required: true, min: 0, max: 100 } },
+  { _id: false }
+);
+
+const paymentPlanSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  // % of the post-advance remaining amount (total - advance) — NOT of the total unit
+  // price, and independent of minBookingPercent. Must sum to exactly 100 across all
+  // stages — validated in projectController before save.
+  stages: { type: [planStageSchema], validate: (v) => v.length > 0 && v.length <= 10 },
+  isDefault: { type: Boolean, default: false },
+});
+
 const projectSchema = new mongoose.Schema(
   {
     agencyId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -23,6 +37,11 @@ const projectSchema = new mongoose.Schema(
     // buyer must pay at least 10% of the unit price to reserve it. Drives both the
     // auto-filled minimum in the booking form and the backend validation on create.
     minBookingPercent: { type: Number, default: 10, min: 0, max: 100 },
+    // Project-specific named payment plans (e.g. "Construction Linked Plan", "Down
+    // Payment Plan") — buyer/agent picks one at booking time. Falls back to the
+    // global DEFAULT_PAYMENT_PLANS template (bookingController.js) when empty, so
+    // older projects created before this feature keep working unchanged.
+    paymentPlans: { type: [paymentPlanSchema], default: [] },
     units: [unitSchema], // each unit can carry its own price, overriding basePrice
     status: { type: String, enum: ["active", "sold_out", "closed"], default: "active" },
     isDeleted: { type: Boolean, default: false },
