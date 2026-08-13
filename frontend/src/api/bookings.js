@@ -10,7 +10,7 @@ export const useBookings = (params = {}) =>
 export const useBooking = (id) =>
   useQuery({
     queryKey: ["booking", id],
-    queryFn: async () => (await apiClient.get(`/bookings/${id}`)).data.data,
+    queryFn: async () => (await apiClient.get(`/bookings/${id}`)).data,
     enabled: !!id,
   });
 

@@ -6,7 +6,7 @@ const installmentSchema = new mongoose.Schema(
     percent: { type: Number, default: null }, // % of the post-advance remaining amount this installment represents
     amount: { type: Number, required: true },
     dueDate: { type: Date, required: true },
-    status: { type: String, enum: ["Pending", "Paid", "Overdue"], default: "Pending" },
+    status: { type: String, enum: ["Pending", "Paid", "Overdue", "Void"], default: "Pending" },
     paidAt: { type: Date, default: null },
     paidAmount: { type: Number, default: 0 },
     reminderSent: { type: Boolean, default: false },

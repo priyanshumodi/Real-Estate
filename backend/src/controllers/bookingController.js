@@ -154,16 +154,42 @@ const listBookings = asyncHandler(async (req, res) => {
   });
 });
 
+// What each status is allowed to move to next — mirrors a real sales pipeline:
+// forward-only through the stages, "Cancelled" reachable from anywhere (including
+// after Completed, for a post-sale cancellation/resale), nothing reachable from
+// Cancelled itself. A "Full Payment" booking (no installments) can jump straight
+// from "Payment Plan Set" to "Completed" since there's no ongoing-installments stage
+// for it to sit in.
+const allowedNextStatuses = (booking) => {
+  const hasInstallments = booking.installments.length > 0;
+  const map = {
+    Reserved: ["Booked", "Cancelled"],
+    Booked: ["Agreement Signed", "Cancelled"],
+    "Agreement Signed": ["Payment Plan Set", "Cancelled"],
+    "Payment Plan Set": hasInstallments ? ["Installments Ongoing", "Cancelled"] : ["Completed", "Cancelled"],
+    "Installments Ongoing": ["Completed", "Cancelled"],
+    // Real-world: a completed sale can still fall through post-registration (buyer
+    // default, cheque bounce found late, mutual cancellation) — allowed, but ONLY
+    // to Cancelled, not back into the middle of the pipeline.
+    Completed: ["Cancelled"],
+    Cancelled: [], // terminal — a resold unit gets a fresh Booking, not a resurrected one
+  };
+  return map[booking.status] || [];
+};
+
 const getBooking = asyncHandler(async (req, res) => {
   const agencyId = scopedAgencyId(req.user);
   const booking = await Booking.findOne({ _id: req.params.id, agencyId, isDeleted: false })
     .populate("project", "name location")
     .populate("client", "name phone email");
   if (!booking) throw new ApiError(404, "Booking not found");
-  return success(res, 200, "Booking fetched", booking);
+  // Drives the frontend's status buttons — only offer transitions the backend will
+  // actually accept, instead of the old "every status is a button" free-for-all.
+  return success(res, 200, "Booking fetched", booking, { nextStatuses: allowedNextStatuses(booking) });
 });
 
-// Moves booking forward through the workflow (Reserved -> ... -> Completed), or Cancelled
+// Moves booking forward through the workflow (Reserved -> ... -> Completed), or Cancelled.
+// Enforces the pipeline above instead of allowing an arbitrary jump to any status.
 const updateBookingStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
   if (!status) throw new ApiError(400, "status is required");
@@ -171,12 +197,33 @@ const updateBookingStatus = asyncHandler(async (req, res) => {
   const booking = await Booking.findOne({ _id: req.params.id, agencyId: req.user._id, isDeleted: false });
   if (!booking) throw new ApiError(404, "Booking not found");
 
+  if (status !== booking.status) {
+    const allowed = allowedNextStatuses(booking);
+    if (!allowed.includes(status)) {
+      throw new ApiError(
+        400,
+        allowed.length
+          ? `Can't move from "${booking.status}" to "${status}" directly. Next allowed: ${allowed.join(", ")}.`
+          : `"${booking.status}" is a final status — no further changes allowed.`
+      );
+    }
+  }
+
+  // Don't let the unit get marked Sold while money is still owed.
+  if (status === "Completed") {
+    const allSettled = booking.installments.every((i) => i.status === "Paid" || i.status === "Void");
+    if (!allSettled) throw new ApiError(400, "All installments must be paid before this booking can be marked Completed.");
+  }
+
   const projectDoc = await Project.findById(booking.project);
   const unit = projectDoc?.units.id(booking.unitId);
 
   if (status === "Cancelled" && booking.status !== "Cancelled") {
-    if (unit) unit.status = "Available";
+    if (unit) unit.status = "Available"; // releases the unit — including out of "Sold" for a post-sale cancellation
     if (projectDoc) { projectDoc.availableUnits += 1; await projectDoc.save(); }
+    // Unpaid installments on a dead booking shouldn't keep showing up as due —
+    // void them rather than leaving them Pending/Overdue forever.
+    booking.installments.forEach((inst) => { if (inst.status !== "Paid") inst.status = "Void"; });
   }
   if (status === "Completed" && unit) {
     unit.status = "Sold";
@@ -199,6 +246,10 @@ const recordInstallmentPayment = asyncHandler(async (req, res) => {
 
   const installment = booking.installments.id(installmentId);
   if (!installment) throw new ApiError(404, "Installment not found");
+  if (["Cancelled", "Completed"].includes(booking.status)) {
+    throw new ApiError(400, `Can't record a payment — this booking is already ${booking.status}.`);
+  }
+  if (installment.status === "Void") throw new ApiError(400, "This installment was voided when the booking was cancelled.");
 
   installment.paidAmount += paidAmount;
   if (installment.paidAmount >= installment.amount) {
